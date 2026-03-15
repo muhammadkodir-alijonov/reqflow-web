@@ -24,6 +24,34 @@ const BACKEND_BASE_URL = "http://localhost:6060";
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const normalizeNotes = (notes, fallbackNotes) => {
+  if (!Array.isArray(notes) || notes.length === 0) {
+    return fallbackNotes;
+  }
+
+  return notes
+    .map((item) => {
+      if (typeof item === "string") {
+        return { left: item, right: "info" };
+      }
+      if (!item || typeof item !== "object") {
+        return null;
+      }
+
+      const left = item.left ?? item.label ?? item.message ?? "";
+      const right = item.right ?? item.kind ?? item.type ?? "info";
+      if (!left) {
+        return null;
+      }
+
+      return {
+        left: String(left),
+        right: String(right)
+      };
+    })
+    .filter(Boolean);
+};
+
 const STAGE_DETAILS = {
   DNS: {
     title: "DNS Lookup",
@@ -79,6 +107,19 @@ const STAGE_DETAILS = {
   }
 };
 
+const getStageDetail = (payloadData, stageShort, fallbackDuration) => {
+  const fallback = STAGE_DETAILS[stageShort];
+  const payloadDetails = payloadData?.stageDetails?.[stageShort];
+  const payloadDetailsByKey = payloadData?.[`${stageShort.toLowerCase()}Details`];
+  const source = payloadDetails ?? payloadDetailsByKey ?? null;
+
+  return {
+    title: source?.title ?? fallback.title,
+    durationMs: Number(source?.durationMs ?? fallbackDuration),
+    notes: normalizeNotes(source?.notes, fallback.notes)
+  };
+};
+
 const buildTimeline = (payloadData) => {
   const total = STAGES.reduce((sum, stage) => sum + payloadData[stage.key], 0);
   let cursor = 0;
@@ -124,7 +165,10 @@ function App() {
   );
 
   const currentStage = timeline[focusedStage] ?? timeline[0];
-  const detail = STAGE_DETAILS[currentStage.short];
+  const detail = useMemo(
+    () => getStageDetail(payload, currentStage.short, currentStage.duration),
+    [payload, currentStage.short, currentStage.duration]
+  );
 
   const resetRun = () => {
     setActiveStage(0);
@@ -294,7 +338,7 @@ function App() {
                   {detail.title}
                 </p>
                 <p className="font-['Share_Tech_Mono'] text-xs text-slate-500">
-                  typical: ~{currentStage.duration}ms
+                  typical: ~{detail.durationMs}ms
                 </p>
               </div>
             </div>
