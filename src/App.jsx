@@ -20,7 +20,29 @@ const MOCK_API_RESPONSE = {
   serverRegion: "ap-southeast"
 };
 
+const BACKEND_BASE_URL = "http://localhost:6060";
+
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const buildTimeline = (payloadData) => {
+  const total = STAGES.reduce((sum, stage) => sum + payloadData[stage.key], 0);
+  let cursor = 0;
+
+  const rows = STAGES.map((stage) => {
+    const duration = payloadData[stage.key];
+    const row = {
+      ...stage,
+      duration,
+      startMs: cursor,
+      startPct: (cursor / total) * 100,
+      widthPct: (duration / total) * 100
+    };
+    cursor += duration;
+    return row;
+  });
+
+  return { total, rows };
+};
 
 function App() {
   const [url, setUrl] = useState(MOCK_API_RESPONSE.url);
@@ -34,26 +56,11 @@ function App() {
   ]);
   const [isRunning, setIsRunning] = useState(false);
 
-  const totalMs = useMemo(
-    () => STAGES.reduce((sum, stage) => sum + MOCK_API_RESPONSE[stage.key], 0),
-    []
+  const [payload, setPayload] = useState(MOCK_API_RESPONSE);
+  const { total: totalMs, rows: timeline } = useMemo(
+    () => buildTimeline(payload),
+    [payload]
   );
-
-  const timeline = useMemo(() => {
-    let cursor = 0;
-    return STAGES.map((stage) => {
-      const duration = MOCK_API_RESPONSE[stage.key];
-      const item = {
-        ...stage,
-        duration,
-        startMs: cursor,
-        startPct: (cursor / totalMs) * 100,
-        widthPct: (duration / totalMs) * 100
-      };
-      cursor += duration;
-      return item;
-    });
-  }, [totalMs]);
 
   const appendLog = (text) => setLogs((prev) => [...prev, text]);
 
@@ -74,11 +81,34 @@ function App() {
     setIsRunning(true);
     resetRun();
 
-    appendLog(`> [API] Mock payload loaded from local JSON (${totalMs}ms total)`);
+    let nextPayload = MOCK_API_RESPONSE;
+    try {
+      const response = await fetch(
+        `${BACKEND_BASE_URL}/api/analyze?url=${encodeURIComponent(url)}`
+      );
+      if (response.ok) {
+        nextPayload = await response.json();
+        appendLog(
+          `> [API] Backend payload loaded (${BACKEND_BASE_URL})`
+        );
+      } else {
+        appendLog(
+          `> [API] Backend returned ${response.status}, using local mock JSON`
+        );
+      }
+    } catch {
+      appendLog(
+        "> [API] Backend is unreachable, using local mock JSON"
+      );
+    }
+
+    const { total: nextTotal, rows: runTimeline } = buildTimeline(nextPayload);
+    setPayload(nextPayload);
+    appendLog(`> [API] Payload ready (${nextTotal}ms total)`);
     await wait(250);
 
-    for (let i = 0; i < timeline.length; i += 1) {
-      const stage = timeline[i];
+    for (let i = 0; i < runTimeline.length; i += 1) {
+      const stage = runTimeline[i];
       setActiveStage(i);
       appendLog(
         `> [${stage.short}] ${stage.label} started... (${stage.duration}ms)`
