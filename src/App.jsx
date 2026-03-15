@@ -149,6 +149,9 @@ function App() {
   );
   const [logs, setLogs] = useState([]);
   const [isRunning, setIsRunning] = useState(false);
+  const [detailProgress, setDetailProgress] = useState(
+    Object.fromEntries(STAGES.map((stage) => [stage.short, 0]))
+  );
 
   const [payload, setPayload] = useState(MOCK_API_RESPONSE);
   const { total: totalMs, rows: timeline } = useMemo(
@@ -169,6 +172,10 @@ function App() {
     () => getStageDetail(payload, currentStage.short, currentStage.duration),
     [payload, currentStage.short, currentStage.duration]
   );
+  const currentVisibleNotes = detail.notes.slice(
+    0,
+    Math.max(detailProgress[currentStage.short] || 0, isRunning ? 0 : detail.notes.length)
+  );
 
   const resetRun = () => {
     setActiveStage(0);
@@ -181,6 +188,7 @@ function App() {
       }
     ]);
     setBarProgress(Object.fromEntries(STAGES.map((stage) => [stage.key, 0])));
+    setDetailProgress(Object.fromEntries(STAGES.map((stage) => [stage.short, 0])));
   };
 
   const runAnalysis = async () => {
@@ -216,12 +224,23 @@ function App() {
 
     for (let i = 0; i < runTimeline.length; i += 1) {
       const stage = runTimeline[i];
+      const stageDetail = getStageDetail(nextPayload, stage.short, stage.duration);
+
       setActiveStage(i);
       setFocusedStage(i);
+      setDetailProgress((prev) => ({ ...prev, [stage.short]: 0 }));
       appendLog(
         `> [${stage.short}] ${stage.label} started... (${stage.duration}ms)`,
         i
       );
+
+      if (stageDetail.notes.length > 0) {
+        setDetailProgress((prev) => ({ ...prev, [stage.short]: 1 }));
+        for (let noteIdx = 2; noteIdx <= stageDetail.notes.length; noteIdx += 1) {
+          await wait(Math.max(110, Math.floor(stage.duration * 4)));
+          setDetailProgress((prev) => ({ ...prev, [stage.short]: noteIdx }));
+        }
+      }
 
       await wait(220);
       setBarProgress((prev) => ({ ...prev, [stage.key]: 1 }));
@@ -355,7 +374,7 @@ function App() {
           </div>
 
           <div className="space-y-2">
-            {detail.notes.map((item, idx) => (
+            {currentVisibleNotes.map((item, idx) => (
               <div
                 key={`${currentStage.short}-${idx}`}
                 className="flex items-center justify-between rounded-lg border border-slate-800/90 bg-slate-950/40 px-3 py-2"

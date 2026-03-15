@@ -67,8 +67,9 @@ body {
 }
 
 .stage-node-done {
-  color: color-mix(in srgb, var(--stage-color) 65%, #94a3b8);
-  opacity: 0.65;
+  color: var(--stage-color);
+  opacity: 0.95;
+  box-shadow: 0 0 12px color-mix(in srgb, var(--stage-color) 58%, transparent);
 }
 
 .waterfall-bar {
