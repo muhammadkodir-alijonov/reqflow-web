@@ -1,0 +1,104 @@
+:root {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: "Space Grotesk", sans-serif;
+  background: radial-gradient(circle at top, #0b1228 0%, #020617 50%, #02030a 100%);
+}
+
+.title-glow {
+  font-family: "Orbitron", sans-serif;
+  text-shadow: 0 0 18px rgba(125, 211, 252, 0.25), 0 0 40px rgba(59, 130, 246, 0.15);
+}
+
+.hero-grid {
+  height: 100%;
+  width: 100%;
+  background-image:
+    linear-gradient(rgba(148, 163, 184, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.05) 1px, transparent 1px);
+  background-size: 36px 36px;
+  mask-image: radial-gradient(circle at 50% 20%, black, transparent 70%);
+}
+
+.panel-glass {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.8), rgba(3, 7, 18, 0.82));
+  backdrop-filter: blur(6px);
+}
+
+.pipeline-line {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  top: 19px;
+  height: 2px;
+  background: linear-gradient(90deg, #f97316, #facc15, #a855f7, #38bdf8, #22c55e, #ec4899);
+  opacity: 0.45;
+}
+
+.stage-node {
+  display: grid;
+  height: 38px;
+  width: 38px;
+  place-items: center;
+  border-radius: 9999px;
+  border: 1px solid color-mix(in srgb, var(--stage-color) 75%, #0f172a);
+  background: radial-gradient(circle at 50% 35%, #0f172a, #020617);
+  color: #94a3b8;
+  font-size: 11px;
+  font-family: "Share Tech Mono", monospace;
+  transition: transform 0.2s ease, box-shadow 0.3s ease, color 0.3s ease;
+}
+
+.stage-node-active {
+  transform: translateY(-2px) scale(1.06);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--stage-color) 78%, transparent);
+  color: var(--stage-color);
+}
+
+.stage-node-done {
+  color: var(--stage-color);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--stage-color) 65%, transparent);
+}
+
+.waterfall-bar {
+  position: absolute;
+  top: 4px;
+  height: calc(100% - 8px);
+  border-radius: 8px;
+  transform-origin: left;
+  transition: transform 0.48s ease-out;
+}
+
+.terminal-line {
+  animation: fadeLine 220ms ease-out;
+}
+
+@keyframes fadeLine {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 640px) {
+  .pipeline-line {
+    display: none;
+  }
+
+  .stage-node {
+    height: 34px;
+    width: 34px;
+  }
+}

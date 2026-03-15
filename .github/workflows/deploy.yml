@@ -1,0 +1,123 @@
+name: CD - Deploy to Production
+
+on:
+  push:
+    branches: ["main"]
+
+env:
+  NODE_VERSION: "20"
+
+jobs:
+  deploy:
+    name: Build Image and Deploy
+    runs-on: ubuntu-latest
+    environment: reqflow
+    env:
+      DOCKER_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/reqflow-web
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract metadata (tags and labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_IMAGE }}
+          tags: |
+            type=sha,prefix=sha-,format=short
+            type=raw,value=latest
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+
+      - name: Deploy to server via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          DOCKER_IMAGE: ${{ env.DOCKER_IMAGE }}
+          GITHUB_SHA: ${{ github.sha }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT || 22 }}
+          envs: DOCKER_IMAGE,GITHUB_SHA
+          command_timeout: 5m
+          script: |
+            set -e
+
+            IMAGE_TAG="sha-$(echo $GITHUB_SHA | cut -c1-7)"
+            FULL_IMAGE="$DOCKER_IMAGE:$IMAGE_TAG"
+
+            OLD_IMAGE=$(docker inspect --format='{{.Image}}' reqflow-web 2>/dev/null || echo "")
+
+            echo ">>> Pulling new image: $FULL_IMAGE"
+            docker pull "$FULL_IMAGE"
+
+            echo ">>> Stopping old container..."
+            docker stop reqflow-web || true
+            docker rm reqflow-web || true
+
+            echo ">>> Starting new container on port 3000..."
+            docker run -d \
+              --name reqflow-web \
+              --restart unless-stopped \
+              -p 3000:3000 \
+              "$FULL_IMAGE"
+
+            echo ">>> Waiting for health check (max 60s)..."
+            HEALTHY=false
+            for i in $(seq 1 6); do
+              sleep 10
+              if curl -sf http://localhost:3000 > /dev/null 2>&1; then
+                echo ">>> Healthy after ${i}0s!"
+                HEALTHY=true
+                break
+              fi
+              echo "Attempt $i/6 ..."
+            done
+
+            if [ "$HEALTHY" = "false" ]; then
+              echo "!!! Health check failed - rolling back..."
+              docker stop reqflow-web || true
+              docker rm reqflow-web || true
+
+              if [ -n "$OLD_IMAGE" ]; then
+                docker run -d \
+                  --name reqflow-web \
+                  --restart unless-stopped \
+                  -p 3000:3000 \
+                  "$OLD_IMAGE"
+                echo ">>> Rolled back to previous image: $OLD_IMAGE"
+              else
+                echo ">>> No previous image found, rollback skipped."
+              fi
+              exit 1
+            fi
+
+            echo ">>> Cleaning up old images (keeping last 3)..."
+            docker images "$DOCKER_IMAGE" --format "{{.ID}} {{.Tag}}" \
+              | grep -v "latest" \
+              | tail -n +4 \
+              | awk '{print $1}' \
+              | xargs -r docker rmi -f || true
+
+            echo ">>> Done! $FULL_IMAGE is live on port 3000"
