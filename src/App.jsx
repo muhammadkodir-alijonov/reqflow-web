@@ -24,6 +24,61 @@ const BACKEND_BASE_URL = "http://localhost:6060";
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const STAGE_DETAILS = {
+  DNS: {
+    title: "DNS Lookup",
+    notes: [
+      { left: "Resolve domain -> IP", right: "A / AAAA" },
+      { left: "Resolver contacted", right: "cache check" },
+      { left: "Authoritative answer", right: "dns ready" }
+    ]
+  },
+  TCP: {
+    title: "TCP Handshake",
+    notes: [
+      { left: "Client SYN", right: "seq init" },
+      { left: "Server SYN+ACK", right: "ack confirm" },
+      { left: "Client ACK", right: "socket open" }
+    ]
+  },
+  TLS: {
+    title: "TLS Handshake",
+    notes: [
+      { left: "ClientHello", right: "cipher suites" },
+      { left: "ServerHello + cert", right: "server chooses" },
+      { left: "Certificate verified", right: "CA trusted" },
+      { left: "Keys exchanged", right: "ECDHE" },
+      { left: "Encrypted tunnel", right: "TLS HTTPS" }
+    ]
+  },
+  REQ: {
+    title: "HTTP Request",
+    notes: [
+      { left: "Request line sent", right: "GET /index" },
+      { left: "Headers transmitted", right: "host + ua" },
+      { left: "Payload completed", right: "server recv" }
+    ]
+  },
+  RES: {
+    title: "HTTP Response",
+    notes: [
+      { left: "HTTP/2 200 OK", right: "status" },
+      { left: "Content-Type: text/html", right: "header" },
+      { left: "Cache-Control: max-age", right: "header" }
+    ]
+  },
+  BND: {
+    title: "Browser Render",
+    notes: [
+      { left: "HTML parsed -> DOM", right: "tree built" },
+      { left: "CSS parsed -> CSSOM", right: "styles computed" },
+      { left: "Render tree created", right: "dom + cssom" },
+      { left: "Layout calculated", right: "box positions" },
+      { left: "Paint complete", right: "visible" }
+    ]
+  }
+};
+
 const buildTimeline = (payloadData) => {
   const total = STAGES.reduce((sum, stage) => sum + payloadData[stage.key], 0);
   let cursor = 0;
@@ -46,14 +101,12 @@ const buildTimeline = (payloadData) => {
 
 function App() {
   const [url, setUrl] = useState(MOCK_API_RESPONSE.url);
-  const [activeStage, setActiveStage] = useState(-1);
+  const [activeStage, setActiveStage] = useState(0);
+  const [focusedStage, setFocusedStage] = useState(0);
   const [barProgress, setBarProgress] = useState(
     Object.fromEntries(STAGES.map((stage) => [stage.key, 0]))
   );
-  const [logs, setLogs] = useState([
-    "> [SYS] Ready. Enter URL and click ANALYZE.",
-    "> [PIPE] Expected order: DNS -> TCP -> TLS -> REQ -> RES -> BND"
-  ]);
+  const [logs, setLogs] = useState([]);
   const [isRunning, setIsRunning] = useState(false);
 
   const [payload, setPayload] = useState(MOCK_API_RESPONSE);
@@ -62,13 +115,26 @@ function App() {
     [payload]
   );
 
-  const appendLog = (text) => setLogs((prev) => [...prev, text]);
+  const appendLog = (text, stageIndex) =>
+    setLogs((prev) => [...prev, { text, stageIndex }]);
+
+  const visibleLogs = useMemo(
+    () => logs.filter((entry) => entry.stageIndex <= focusedStage),
+    [logs, focusedStage]
+  );
+
+  const currentStage = timeline[focusedStage] ?? timeline[0];
+  const detail = STAGE_DETAILS[currentStage.short];
 
   const resetRun = () => {
-    setActiveStage(-1);
+    setActiveStage(0);
+    setFocusedStage(0);
     setLogs([
-      `> [REQ] Starting analysis for ${url}`,
-      "> [SYS] Initializing waterfall renderer..."
+      { text: `> [REQ] Starting analysis for ${url}`, stageIndex: 0 },
+      {
+        text: "> [PIPE] Sequence: DNS -> TCP -> TLS -> REQ -> RES -> BND",
+        stageIndex: 0
+      }
     ]);
     setBarProgress(Object.fromEntries(STAGES.map((stage) => [stage.key, 0])));
   };
@@ -88,41 +154,49 @@ function App() {
       );
       if (response.ok) {
         nextPayload = await response.json();
-        appendLog(
-          `> [API] Backend payload loaded (${BACKEND_BASE_URL})`
-        );
+        appendLog(`> [API] Backend payload loaded (${BACKEND_BASE_URL})`, 0);
       } else {
         appendLog(
-          `> [API] Backend returned ${response.status}, using local mock JSON`
+          `> [API] Backend returned ${response.status}, using local mock JSON`,
+          0
         );
       }
     } catch {
-      appendLog(
-        "> [API] Backend is unreachable, using local mock JSON"
-      );
+      appendLog("> [API] Backend is unreachable, using local mock JSON", 0);
     }
 
     const { total: nextTotal, rows: runTimeline } = buildTimeline(nextPayload);
     setPayload(nextPayload);
-    appendLog(`> [API] Payload ready (${nextTotal}ms total)`);
+    appendLog(`> [API] Payload ready (${nextTotal}ms total)`, 0);
     await wait(250);
 
     for (let i = 0; i < runTimeline.length; i += 1) {
       const stage = runTimeline[i];
       setActiveStage(i);
+      setFocusedStage(i);
       appendLog(
-        `> [${stage.short}] ${stage.label} started... (${stage.duration}ms)`
+        `> [${stage.short}] ${stage.label} started... (${stage.duration}ms)`,
+        i
       );
 
       await wait(220);
       setBarProgress((prev) => ({ ...prev, [stage.key]: 1 }));
       await wait(Math.max(380, stage.duration * 14));
-      appendLog(`> [${stage.short}] ${stage.label} done in ${stage.duration}ms`);
+      appendLog(`> [${stage.short}] ${stage.label} done in ${stage.duration}ms`, i);
     }
 
-    appendLog(`> [BND] Visual build complete. ${url} lifecycle resolved.`);
-    setActiveStage(-1);
+    appendLog(`> [BND] Visual build complete. ${url} lifecycle resolved.`, 5);
+    setActiveStage(5);
+    setFocusedStage(5);
     setIsRunning(false);
+  };
+
+  const handleStageFocus = (index) => {
+    if (isRunning) {
+      return;
+    }
+    setFocusedStage(index);
+    setActiveStage(index);
   };
 
   return (
@@ -176,21 +250,84 @@ function App() {
               const isDone = barProgress[stage.key] === 1;
               return (
                 <div key={stage.key} className="relative flex flex-col items-center gap-2">
-                  <div
+                  <button
+                    type="button"
+                    onClick={() => handleStageFocus(index)}
                     className={`stage-node ${isActive ? "stage-node-active" : ""} ${
                       isDone ? "stage-node-done" : ""
                     }`}
                     style={{ "--stage-color": stage.color }}
                   >
                     {stage.short}
-                  </div>
-                  <div className="text-center font-['Space_Grotesk'] text-[11px] text-slate-300">
+                  </button>
+                  <div className="text-center font-['Space_Grotesk'] text-[10px] font-semibold text-slate-300">
                     {stage.label}
                     <p className="font-mono text-[10px] text-slate-500">~{stage.duration}ms</p>
                   </div>
                 </div>
               );
             })}
+          </div>
+        </section>
+
+        <section
+          className="panel-glass rounded-2xl border border-slate-700/40 p-4 sm:p-5"
+          style={{ boxShadow: `0 0 30px ${currentStage.color}26` }}
+        >
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div
+                className="grid h-10 w-10 place-items-center rounded-xl border text-sm font-bold"
+                style={{
+                  borderColor: `${currentStage.color}88`,
+                  color: currentStage.color,
+                  boxShadow: `0 0 16px ${currentStage.color}44`
+                }}
+              >
+                {currentStage.short}
+              </div>
+              <div>
+                <p
+                  className="font-['Orbitron'] text-xl font-bold"
+                  style={{ color: currentStage.color }}
+                >
+                  {detail.title}
+                </p>
+                <p className="font-['Share_Tech_Mono'] text-xs text-slate-500">
+                  typical: ~{currentStage.duration}ms
+                </p>
+              </div>
+            </div>
+            <div
+              className="rounded-full border px-3 py-1 font-['Share_Tech_Mono'] text-xs"
+              style={{
+                borderColor: `${currentStage.color}66`,
+                color: currentStage.color,
+                boxShadow: `0 0 12px ${currentStage.color}33`
+              }}
+            >
+              {isRunning ? "in progress" : "ready"}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            {detail.notes.map((item, idx) => (
+              <div
+                key={`${currentStage.short}-${idx}`}
+                className="flex items-center justify-between rounded-lg border border-slate-800/90 bg-slate-950/40 px-3 py-2"
+              >
+                <p className="flex items-center gap-2 text-xs font-semibold text-slate-300">
+                  <span
+                    className="inline-block h-1.5 w-1.5 rounded-full"
+                    style={{ background: currentStage.color }}
+                  />
+                  {item.left}
+                </p>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                  {item.right}
+                </p>
+              </div>
+            ))}
           </div>
         </section>
 
@@ -203,11 +340,11 @@ function App() {
           </div>
 
           <div className="space-y-3">
-            {timeline.map((stage) => (
+            {timeline.map((stage, idx) => (
               <div key={`row-${stage.key}`} className="grid grid-cols-[70px_1fr_62px] items-center gap-3 sm:grid-cols-[90px_1fr_70px]">
                 <span
-                  className="font-['Share_Tech_Mono'] text-xs uppercase tracking-wider"
-                  style={{ color: stage.color }}
+                  className="font-['Share_Tech_Mono'] text-xs font-bold uppercase tracking-wider"
+                  style={{ color: stage.color, opacity: focusedStage >= idx ? 1 : 0.28 }}
                 >
                   {stage.short}
                 </span>
@@ -223,12 +360,13 @@ function App() {
                       width: `${stage.widthPct}%`,
                       background: `linear-gradient(90deg, ${stage.color}, ${stage.color}cc)`,
                       boxShadow: `0 0 16px ${stage.color}66`,
-                      transform: `scaleX(${barProgress[stage.key]})`
+                      opacity: focusedStage >= idx ? 1 : 0.2,
+                      transform: `scaleX(${barProgress[stage.key] || (!isRunning && focusedStage >= idx ? 1 : 0)})`
                     }}
                   />
                 </div>
                 <span className="font-['Share_Tech_Mono'] text-right text-xs text-slate-400">
-                  ~{stage.duration}ms
+                  {focusedStage >= idx ? `~${stage.duration}ms` : ""}
                 </span>
               </div>
             ))}
@@ -237,10 +375,10 @@ function App() {
 
         <section className="panel-glass rounded-2xl border border-slate-700/40 p-4 sm:p-5">
           <p className="mb-3 font-mono text-xs uppercase tracking-[0.35em] text-slate-500">Terminal Log</p>
-          <div className="max-h-72 overflow-auto rounded-xl border border-slate-800 bg-black/60 p-4 font-['Share_Tech_Mono'] text-sm leading-7 text-slate-200">
-            {logs.map((line, index) => (
-              <div key={`${line}-${index}`} className="terminal-line">
-                {line}
+          <div className="max-h-72 overflow-auto rounded-xl border border-slate-800 bg-black/60 p-4 font-['Share_Tech_Mono'] text-xs leading-6 text-slate-200">
+            {visibleLogs.map((entry, index) => (
+              <div key={`${entry.text}-${index}`} className="terminal-line">
+                {entry.text}
               </div>
             ))}
           </div>

@@ -48,24 +48,27 @@ body {
   height: 38px;
   width: 38px;
   place-items: center;
+  cursor: pointer;
   border-radius: 9999px;
   border: 1px solid color-mix(in srgb, var(--stage-color) 75%, #0f172a);
   background: radial-gradient(circle at 50% 35%, #0f172a, #020617);
   color: #94a3b8;
+  opacity: 0.42;
   font-size: 11px;
   font-family: "Share Tech Mono", monospace;
-  transition: transform 0.2s ease, box-shadow 0.3s ease, color 0.3s ease;
+  transition: transform 0.2s ease, box-shadow 0.3s ease, color 0.3s ease, opacity 0.3s ease;
 }
 
 .stage-node-active {
   transform: translateY(-2px) scale(1.06);
   box-shadow: 0 0 18px color-mix(in srgb, var(--stage-color) 78%, transparent);
   color: var(--stage-color);
+  opacity: 1;
 }
 
 .stage-node-done {
-  color: var(--stage-color);
-  box-shadow: 0 0 14px color-mix(in srgb, var(--stage-color) 65%, transparent);
+  color: color-mix(in srgb, var(--stage-color) 65%, #94a3b8);
+  opacity: 0.65;
 }
 
 .waterfall-bar {

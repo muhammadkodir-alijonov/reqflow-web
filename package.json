@@ -4,9 +4,9 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --port 6000 --strictPort",
     "build": "vite build",
-    "preview": "vite preview --port 3000",
+    "preview": "vite preview --port 6000 --strictPort",
     "lint": "eslint ."
   },
   "dependencies": {
