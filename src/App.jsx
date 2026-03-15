@@ -458,12 +458,12 @@ function App() {
           <p className="font-['Share_Tech_Mono'] text-xs tracking-[0.22em] text-slate-500">
             crafted by
             <a
-              href="https://muhamamdoqdir.uz"
+              href="https://muhammadqodir.com"
               target="_blank"
               rel="noreferrer"
               className="ml-2 text-cyan-300 transition hover:text-cyan-200"
             >
-              muhamamdoqdir.uz
+              muhammadqodir.com
             </a>
           </p>
         </footer>
