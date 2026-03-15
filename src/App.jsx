@@ -56,24 +56,27 @@ const STAGE_DETAILS = {
   DNS: {
     title: "DNS Lookup",
     notes: [
-      { left: "Resolve domain -> IP", right: "A / AAAA" },
-      { left: "Resolver contacted", right: "cache check" },
-      { left: "Authoritative answer", right: "dns ready" }
+      { left: "Browser checks cache", right: "cached? no" },
+      { left: "OS resolver queried", right: "asking system" },
+      { left: "Root nameserver ->", right: ".com" },
+      { left: "TLD nameserver ->", right: "example.com" },
+      { left: "IP returned: 93.184.216.34", right: "ready" }
     ]
   },
   TCP: {
     title: "TCP Handshake",
     notes: [
-      { left: "Client SYN", right: "seq init" },
-      { left: "Server SYN+ACK", right: "ack confirm" },
-      { left: "Client ACK", right: "socket open" }
+      { left: "SYN ->", right: "client -> server" },
+      { left: "<- SYN-ACK", right: "server -> client" },
+      { left: "ACK ->", right: "client -> server" },
+      { left: "Connection established", right: "socket open" }
     ]
   },
   TLS: {
     title: "TLS Handshake",
     notes: [
-      { left: "ClientHello", right: "cipher suites" },
-      { left: "ServerHello + cert", right: "server chooses" },
+      { left: "ClientHello ->", right: "cipher suites" },
+      { left: "<- ServerHello + cert", right: "server chooses" },
       { left: "Certificate verified", right: "CA trusted" },
       { left: "Keys exchanged", right: "ECDHE" },
       { left: "Encrypted tunnel", right: "TLS HTTPS" }
@@ -82,17 +85,21 @@ const STAGE_DETAILS = {
   REQ: {
     title: "HTTP Request",
     notes: [
-      { left: "Request line sent", right: "GET /index" },
-      { left: "Headers transmitted", right: "host + ua" },
-      { left: "Payload completed", right: "server recv" }
+      { left: "GET /index.html HTTP/2", right: "method + path" },
+      { left: "Host: example.com", right: "header" },
+      { left: "Accept: text/html", right: "header" },
+      { left: "Cookie: session=abc", right: "header" },
+      { left: "Request sent ->", right: "encrypted" }
     ]
   },
   RES: {
     title: "HTTP Response",
     notes: [
-      { left: "HTTP/2 200 OK", right: "status" },
+      { left: "<- HTTP/2 200 OK", right: "status" },
       { left: "Content-Type: text/html", right: "header" },
-      { left: "Cache-Control: max-age", right: "header" }
+      { left: "Cache-Control: max-age", right: "header" },
+      { left: "Body: <html>...", right: "payload" },
+      { left: "Response received", right: "14kb" }
     ]
   },
   BND: {
@@ -446,6 +453,20 @@ function App() {
             ))}
           </div>
         </section>
+
+        <footer className="pb-2 pt-1 text-center">
+          <p className="font-['Share_Tech_Mono'] text-xs tracking-[0.22em] text-slate-500">
+            crafted by
+            <a
+              href="https://muhamamdoqdir.uz"
+              target="_blank"
+              rel="noreferrer"
+              className="ml-2 text-cyan-300 transition hover:text-cyan-200"
+            >
+              muhamamdoqdir.uz
+            </a>
+          </p>
+        </footer>
       </section>
     </main>
   );

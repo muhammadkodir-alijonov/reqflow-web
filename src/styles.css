@@ -40,7 +40,8 @@ body {
   top: 19px;
   height: 2px;
   background: linear-gradient(90deg, #f97316, #facc15, #a855f7, #38bdf8, #22c55e, #ec4899);
-  opacity: 0.45;
+  opacity: 0.62;
+  filter: drop-shadow(0 0 8px rgba(148, 163, 184, 0.24));
 }
 
 .stage-node {
@@ -50,18 +51,21 @@ body {
   place-items: center;
   cursor: pointer;
   border-radius: 9999px;
-  border: 1px solid color-mix(in srgb, var(--stage-color) 75%, #0f172a);
+  border: 1px solid color-mix(in srgb, var(--stage-color) 84%, #0f172a);
   background: radial-gradient(circle at 50% 35%, #0f172a, #020617);
-  color: #94a3b8;
-  opacity: 0.42;
-  font-size: 11px;
+  color: #b4c3d9;
+  opacity: 0.52;
+  font-size: 12px;
+  font-weight: 700;
   font-family: "Share Tech Mono", monospace;
   transition: transform 0.2s ease, box-shadow 0.3s ease, color 0.3s ease, opacity 0.3s ease;
 }
 
 .stage-node-active {
   transform: translateY(-2px) scale(1.06);
-  box-shadow: 0 0 18px color-mix(in srgb, var(--stage-color) 78%, transparent);
+  box-shadow:
+    0 0 22px color-mix(in srgb, var(--stage-color) 82%, transparent),
+    0 0 34px color-mix(in srgb, var(--stage-color) 46%, transparent);
   color: var(--stage-color);
   opacity: 1;
 }
@@ -69,7 +73,7 @@ body {
 .stage-node-done {
   color: var(--stage-color);
   opacity: 0.95;
-  box-shadow: 0 0 12px color-mix(in srgb, var(--stage-color) 58%, transparent);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--stage-color) 64%, transparent);
 }
 
 .waterfall-bar {
@@ -78,7 +82,8 @@ body {
   height: calc(100% - 8px);
   border-radius: 8px;
   transform-origin: left;
-  transition: transform 0.48s ease-out;
+  filter: saturate(115%) brightness(110%);
+  transition: transform 0.48s ease-out, opacity 0.24s ease;
 }
 
 .terminal-line {
