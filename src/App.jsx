@@ -27,6 +27,26 @@ const USE_MOCK_ON_ERROR =
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const pickDuration = (candidates, fallbackValue = 0) => {
+  for (const value of candidates) {
+    const normalized = Number(value);
+    if (Number.isFinite(normalized) && normalized >= 0) {
+      return normalized;
+    }
+  }
+
+  return fallbackValue;
+};
+
+const isValidHttpUrl = (value) => {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+};
+
 const normalizeNotes = (notes, fallbackNotes) => {
   if (!Array.isArray(notes) || notes.length === 0) {
     return fallbackNotes;
@@ -57,15 +77,56 @@ const normalizeNotes = (notes, fallbackNotes) => {
 
 const parsePayload = (raw) => {
   const source = raw?.data ?? raw ?? {};
+  const timings = source.timings ?? {};
+
+  const dnsLookupMs = pickDuration([
+    source.dnsLookupMs,
+    timings.dnsLookupMs,
+    timings.dnsMs
+  ]);
+  const tcpHandshakeMs = pickDuration([
+    source.tcpHandshakeMs,
+    timings.tcpHandshakeMs,
+    timings.tcpMs
+  ]);
+  const tlsHandshakeMs = pickDuration([
+    source.tlsHandshakeMs,
+    timings.tlsHandshakeMs,
+    timings.tlsMs
+  ]);
+  const requestMs = pickDuration([
+    source.requestMs,
+    source.httpRequestMs,
+    timings.requestMs,
+    timings.httpRequestMs
+  ]);
+  const responseMs = pickDuration([
+    source.responseMs,
+    source.httpResponseMs,
+    timings.responseMs,
+    timings.httpResponseMs
+  ]);
+
+  const totalTimeMs = pickDuration([source.totalTimeMs, timings.totalTimeMs], 0);
+  const sumWithoutRender =
+    dnsLookupMs + tcpHandshakeMs + tlsHandshakeMs + requestMs + responseMs;
+  const browserRenderMs = pickDuration(
+    [
+      source.browserRenderMs,
+      timings.browserRenderMs,
+      totalTimeMs > 0 ? Math.max(totalTimeMs - sumWithoutRender, 0) : undefined
+    ],
+    0
+  );
 
   return {
     url: source.url ?? MOCK_API_RESPONSE.url,
-    dnsLookupMs: Number(source.dnsLookupMs ?? MOCK_API_RESPONSE.dnsLookupMs),
-    tcpHandshakeMs: Number(source.tcpHandshakeMs ?? MOCK_API_RESPONSE.tcpHandshakeMs),
-    tlsHandshakeMs: Number(source.tlsHandshakeMs ?? MOCK_API_RESPONSE.tlsHandshakeMs),
-    requestMs: Number(source.requestMs ?? MOCK_API_RESPONSE.requestMs),
-    responseMs: Number(source.responseMs ?? MOCK_API_RESPONSE.responseMs),
-    browserRenderMs: Number(source.browserRenderMs ?? MOCK_API_RESPONSE.browserRenderMs),
+    dnsLookupMs,
+    tcpHandshakeMs,
+    tlsHandshakeMs,
+    requestMs,
+    responseMs,
+    browserRenderMs,
     serverRegion: source.serverRegion ?? MOCK_API_RESPONSE.serverRegion,
     stageDetails:
       source.stageDetails && typeof source.stageDetails === "object"
@@ -183,6 +244,7 @@ const joinApiPath = (base, path) => {
 
 function App() {
   const [url, setUrl] = useState(MOCK_API_RESPONSE.url);
+  const [errorMessage, setErrorMessage] = useState("");
   const [activeStage, setActiveStage] = useState(0);
   const [focusedStage, setFocusedStage] = useState(0);
   const [barProgress, setBarProgress] = useState(
@@ -218,11 +280,11 @@ function App() {
     Math.max(detailProgress[currentStage.short] || 0, isRunning ? 0 : detail.notes.length)
   );
 
-  const resetRun = () => {
+  const resetRun = (targetUrl) => {
     setActiveStage(0);
     setFocusedStage(0);
     setLogs([
-      { text: `> [REQ] Starting analysis for ${url}`, stageIndex: 0 },
+      { text: `> [REQ] Starting analysis for ${targetUrl}`, stageIndex: 0 },
       {
         text: "> [PIPE] Sequence: DNS -> TCP -> TLS -> REQ -> RES -> BND",
         stageIndex: 0
@@ -237,11 +299,26 @@ function App() {
       return;
     }
 
+    const targetUrl = url.trim();
+    setErrorMessage("");
+
+    if (!isValidHttpUrl(targetUrl)) {
+      setErrorMessage("URL noto'g'ri. Faqat http:// yoki https:// bilan to'liq URL kiriting.");
+      setLogs([
+        {
+          text: `> [ERR] Invalid URL: ${targetUrl || "(empty)"}`,
+          stageIndex: 0
+        }
+      ]);
+      return;
+    }
+
     setIsRunning(true);
-    resetRun();
+    resetRun(targetUrl);
+    setUrl(targetUrl);
 
     let nextPayload = null;
-    const analyzeUrl = `${joinApiPath(API_BASE_URL, "/analyze")}?url=${encodeURIComponent(url)}`;
+    const analyzeUrl = `${joinApiPath(API_BASE_URL, "/analyze")}?url=${encodeURIComponent(targetUrl)}`;
 
     try {
       const response = await fetch(analyzeUrl);
@@ -250,16 +327,32 @@ function App() {
         nextPayload = parsePayload(body);
         appendLog(`> [API] Backend payload loaded (${API_BASE_URL})`, 0);
       } else {
-        throw new Error(`Backend returned ${response.status}`);
+        let backendMessage = "";
+        try {
+          const errorBody = await response.json();
+          backendMessage =
+            errorBody?.message ?? errorBody?.error ?? errorBody?.detail ?? "";
+        } catch {
+          // no-op: fallback to status-only message
+        }
+
+        const safeMessage = backendMessage
+          ? `Backend returned ${response.status}: ${backendMessage}`
+          : `Backend returned ${response.status}`;
+        throw new Error(safeMessage);
       }
     } catch (error) {
+      const safeError = error?.message ?? "Unexpected backend error";
       if (!USE_MOCK_ON_ERROR) {
-        appendLog(`> [API] ${error.message}. Mock fallback disabled.`, 0);
+        setErrorMessage(safeError);
+        appendLog(`> [ERR] ${safeError}`, 0);
+        appendLog("> [API] Mock fallback disabled. Real backend response required.", 0);
         setIsRunning(false);
         return;
       }
 
       nextPayload = MOCK_API_RESPONSE;
+      setErrorMessage(`${safeError}. Mock data ko'rsatilmoqda.`);
       appendLog("> [API] Backend is unreachable, using local mock JSON", 0);
     }
 
@@ -294,7 +387,7 @@ function App() {
       appendLog(`> [${stage.short}] ${stage.label} done in ${stage.duration}ms`, i);
     }
 
-    appendLog(`> [BND] Visual build complete. ${url} lifecycle resolved.`, 5);
+    appendLog(`> [BND] Visual build complete. ${targetUrl} lifecycle resolved.`, 5);
     setActiveStage(5);
     setFocusedStage(5);
     setIsRunning(false);
@@ -346,6 +439,12 @@ function App() {
               {isRunning ? "Running..." : "Analyze"}
             </button>
           </div>
+
+          {errorMessage ? (
+            <p className="mt-3 rounded-xl border border-rose-500/45 bg-rose-500/10 px-3 py-2 font-['Share_Tech_Mono'] text-xs text-rose-200">
+              {errorMessage}
+            </p>
+          ) : null}
         </section>
 
         <section className="panel-glass rounded-2xl border border-slate-700/40 p-4 sm:p-5">
