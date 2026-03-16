@@ -27,6 +27,19 @@ const USE_MOCK_ON_ERROR =
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const waitForNextPaint = () =>
+  new Promise((resolve) => {
+    if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") {
+      resolve();
+      return;
+    }
+
+    // Two RAF ticks is a common approach to wait until the next paint is committed.
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(resolve);
+    });
+  });
+
 const pickDuration = (candidates, fallbackValue = 0) => {
   for (const value of candidates) {
     const normalized = Number(value);
@@ -107,16 +120,8 @@ const parsePayload = (raw) => {
     timings.httpResponseMs
   ]);
 
-  const totalTimeMs = pickDuration([source.totalTimeMs, timings.totalTimeMs], 0);
-  const sumWithoutRender =
-    dnsLookupMs + tcpHandshakeMs + tlsHandshakeMs + requestMs + responseMs;
-  const browserRenderMs = pickDuration(
-    [
-      source.browserRenderMs,
-      timings.browserRenderMs,
-      totalTimeMs > 0 ? Math.max(totalTimeMs - sumWithoutRender, 0) : undefined
-    ],
-    0
+  const browserRenderRaw = [source.browserRenderMs, timings.browserRenderMs].find(
+    (value) => Number.isFinite(Number(value)) && Number(value) >= 0
   );
 
   return {
@@ -126,7 +131,10 @@ const parsePayload = (raw) => {
     tlsHandshakeMs,
     requestMs,
     responseMs,
-    browserRenderMs,
+    browserRenderMs:
+      browserRenderRaw === undefined || browserRenderRaw === null
+        ? null
+        : Number(browserRenderRaw),
     serverRegion: source.serverRegion ?? MOCK_API_RESPONSE.serverRegion,
     stageDetails:
       source.stageDetails && typeof source.stageDetails === "object"
@@ -356,13 +364,27 @@ function App() {
       appendLog("> [API] Backend is unreachable, using local mock JSON", 0);
     }
 
-    const { total: nextTotal, rows: runTimeline } = buildTimeline(nextPayload);
-    setPayload(nextPayload);
-    appendLog(`> [API] Payload ready (${nextTotal}ms total)`, 0);
+    let runMetrics = buildTimeline(nextPayload);
+    if (nextPayload.browserRenderMs === null) {
+      const payloadWithoutBnd = { ...nextPayload, browserRenderMs: 0 };
+      const renderStart = typeof performance !== "undefined" ? performance.now() : Date.now();
+      setPayload(payloadWithoutBnd);
+      await waitForNextPaint();
+      const renderEnd = typeof performance !== "undefined" ? performance.now() : Date.now();
+      const measuredRenderMs = Math.max(1, Math.round(renderEnd - renderStart));
+      nextPayload = { ...nextPayload, browserRenderMs: measuredRenderMs };
+      runMetrics = buildTimeline(nextPayload);
+      setPayload(nextPayload);
+      appendLog(`> [BND] Browser render measured on client (${measuredRenderMs}ms)`, 0);
+    } else {
+      setPayload(nextPayload);
+    }
+
+    appendLog(`> [API] Payload ready (${runMetrics.total}ms total)`, 0);
     await wait(250);
 
-    for (let i = 0; i < runTimeline.length; i += 1) {
-      const stage = runTimeline[i];
+    for (let i = 0; i < runMetrics.rows.length; i += 1) {
+      const stage = runMetrics.rows[i];
       const stageDetail = getStageDetail(nextPayload, stage.short, stage.duration);
 
       setActiveStage(i);
