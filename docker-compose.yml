@@ -1,0 +1,7 @@
+services:
+  web:
+    image: ${DOCKER_IMAGE}:${IMAGE_TAG:-latest}
+    container_name: reqflow-web
+    restart: unless-stopped
+    ports:
+      - "3000:80"
