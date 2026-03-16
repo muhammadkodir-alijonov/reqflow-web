@@ -9,7 +9,7 @@ env:
 
 jobs:
   deploy:
-    name: Build Image and Deploy
+    name: Build Image & Deploy
     runs-on: ubuntu-latest
     environment: reqflow
     env:
@@ -38,7 +38,7 @@ jobs:
             type=raw,value=latest
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile
@@ -49,6 +49,38 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: false
 
+      - name: Validate deployment secrets
+        shell: bash
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+        run: |
+          set -euo pipefail
+
+          missing=0
+          for secret_name in DOCKERHUB_USERNAME DOCKERHUB_TOKEN SERVER_HOST SERVER_USER SERVER_SSH_KEY; do
+            if [ -z "${!secret_name}" ]; then
+              echo "::error::Missing required secret: ${secret_name}"
+              missing=1
+            fi
+          done
+
+          if [ "${missing}" -ne 0 ]; then
+            exit 1
+          fi
+
+          if ! printf '%s' "$SERVER_SSH_KEY" | grep -Eq -- '-----BEGIN (OPENSSH|RSA|EC|DSA) PRIVATE KEY-----'; then
+            echo "::error::SERVER_SSH_KEY is not a valid private key format. Paste the full private key including BEGIN/END lines."
+            exit 1
+          fi
+
+          if printf '%s' "$SERVER_SSH_KEY" | grep -q '\\n'; then
+            echo "::warning::SERVER_SSH_KEY contains literal \\n characters. Store it as a multiline secret instead."
+          fi
+
       - name: Deploy to server via SSH
         uses: appleboy/ssh-action@v1.0.3
         env:
@@ -58,6 +90,7 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
+          passphrase: ${{ secrets.SERVER_SSH_PASSPHRASE }}
           port: ${{ secrets.SERVER_PORT || 22 }}
           envs: DOCKER_IMAGE,GITHUB_SHA
           command_timeout: 5m
@@ -66,58 +99,81 @@ jobs:
 
             IMAGE_TAG="sha-$(echo $GITHUB_SHA | cut -c1-7)"
             FULL_IMAGE="$DOCKER_IMAGE:$IMAGE_TAG"
+            APP_DIR="/root/reqflow-web"
 
-            OLD_IMAGE=$(docker inspect --format='{{.Image}}' reqflow-web 2>/dev/null || echo "")
+            has_compose_file() {
+              [ -f "$1/docker-compose.yml" ] || [ -f "$1/compose.yml" ] || [ -f "$1/docker-compose.yaml" ] || [ -f "$1/compose.yaml" ]
+            }
+
+            compose_up() {
+              if docker compose version >/dev/null 2>&1; then
+                DOCKER_IMAGE="$DOCKER_IMAGE" IMAGE_TAG="$1" docker compose up -d --no-deps web
+              elif command -v docker-compose >/dev/null 2>&1; then
+                DOCKER_IMAGE="$DOCKER_IMAGE" IMAGE_TAG="$1" docker-compose up -d --no-deps web
+              else
+                echo ">>> Neither 'docker compose' nor 'docker-compose' is installed on the server."
+                exit 1
+              fi
+            }
+
+            if ! has_compose_file "$APP_DIR"; then
+              echo ">>> Docker compose file not found in $APP_DIR"
+              echo ">>> Searching common directories for compose file..."
+
+              FOUND_COMPOSE_FILE=$( (find /root /home /opt /srv -maxdepth 5 -type f \( -name 'docker-compose.yml' -o -name 'compose.yml' -o -name 'docker-compose.yaml' -o -name 'compose.yaml' \) 2>/dev/null || true) | head -n 1 )
+
+              if [ -n "$FOUND_COMPOSE_FILE" ]; then
+                APP_DIR=$(dirname "$FOUND_COMPOSE_FILE")
+                echo ">>> Auto-detected APP_DIR: $APP_DIR"
+              else
+                echo ">>> Could not auto-detect compose file."
+                echo ">>> Set APP_DIR in deploy workflow to your actual server path."
+                exit 1
+              fi
+            fi
+
+            echo ">>> Using APP_DIR: $APP_DIR"
 
             echo ">>> Pulling new image: $FULL_IMAGE"
             docker pull "$FULL_IMAGE"
 
-            echo ">>> Stopping old container..."
-            docker stop reqflow-web || true
-            docker rm reqflow-web || true
+            cd "$APP_DIR"
 
-            echo ">>> Starting new container on port 3000..."
-            docker run -d \
-              --name reqflow-web \
-              --restart unless-stopped \
-              -p 3000:80 \
-              "$FULL_IMAGE"
+            if [ -f .env ] && grep -q '^IMAGE_TAG=' .env; then
+              sed -i "s|^IMAGE_TAG=.*|IMAGE_TAG=${IMAGE_TAG}|" .env
+              echo ">>> Updated IMAGE_TAG in .env"
+            else
+              echo ">>> .env or IMAGE_TAG not found. Using runtime IMAGE_TAG for compose commands."
+            fi
 
-            echo ">>> Waiting for health check (max 60s)..."
+            echo ">>> Restarting web container"
+            compose_up "$IMAGE_TAG"
+
+            echo ">>> Waiting for health check (max 90s)..."
             HEALTHY=false
-            for i in $(seq 1 6); do
+            for i in $(seq 1 9); do
               sleep 10
               if curl -sf http://localhost:3000 > /dev/null 2>&1; then
                 echo ">>> Healthy after ${i}0s!"
                 HEALTHY=true
                 break
               fi
-              echo "Attempt $i/6 ..."
+              echo "Attempt $i/9..."
             done
 
             if [ "$HEALTHY" = "false" ]; then
-              echo "!!! Health check failed - rolling back..."
-              docker stop reqflow-web || true
-              docker rm reqflow-web || true
-
-              if [ -n "$OLD_IMAGE" ]; then
-                docker run -d \
-                  --name reqflow-web \
-                  --restart unless-stopped \
-                  -p 3000:80 \
-                  "$OLD_IMAGE"
-                echo ">>> Rolled back to previous image: $OLD_IMAGE"
-              else
-                echo ">>> No previous image found, rollback skipped."
+              echo ">>> Rollback..."
+              if [ -f .env ] && grep -q '^IMAGE_TAG=' .env; then
+                sed -i "s|^IMAGE_TAG=.*|IMAGE_TAG=latest|" .env
               fi
+              compose_up latest
               exit 1
             fi
 
-            echo ">>> Cleaning up old images (keeping last 3)..."
             docker images "$DOCKER_IMAGE" --format "{{.ID}} {{.Tag}}" \
               | grep -v "latest" \
               | tail -n +4 \
               | awk '{print $1}' \
               | xargs -r docker rmi -f || true
 
-            echo ">>> Done! $FULL_IMAGE is live on port 3000"
+            echo ">>> Done! $FULL_IMAGE"
