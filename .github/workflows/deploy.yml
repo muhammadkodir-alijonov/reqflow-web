@@ -80,7 +80,7 @@ jobs:
             docker run -d \
               --name reqflow-web \
               --restart unless-stopped \
-              -p 3000:3000 \
+              -p 3000:80 \
               "$FULL_IMAGE"
 
             echo ">>> Waiting for health check (max 60s)..."
@@ -104,7 +104,7 @@ jobs:
                 docker run -d \
                   --name reqflow-web \
                   --restart unless-stopped \
-                  -p 3000:3000 \
+                  -p 3000:80 \
                   "$OLD_IMAGE"
                 echo ">>> Rolled back to previous image: $OLD_IMAGE"
               else
