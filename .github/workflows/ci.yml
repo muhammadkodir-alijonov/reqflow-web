@@ -1,4 +1,4 @@
-name: CI - Build and Lint
+name: CI - Build & Test
 
 on:
   pull_request:
@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    name: Lint and Build
+    name: Build & Test
     runs-on: ubuntu-latest
 
     steps:

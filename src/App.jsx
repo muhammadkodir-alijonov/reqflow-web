@@ -20,7 +20,10 @@ const MOCK_API_RESPONSE = {
   serverRegion: "ap-southeast"
 };
 
-const BACKEND_BASE_URL = "http://localhost:6060";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
+const USE_MOCK_ON_ERROR =
+  String(import.meta.env.VITE_USE_MOCK_ON_ERROR ?? "false").toLowerCase() ===
+  "true";
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -50,6 +53,31 @@ const normalizeNotes = (notes, fallbackNotes) => {
       };
     })
     .filter(Boolean);
+};
+
+const parsePayload = (raw) => {
+  const source = raw?.data ?? raw ?? {};
+
+  return {
+    url: source.url ?? MOCK_API_RESPONSE.url,
+    dnsLookupMs: Number(source.dnsLookupMs ?? MOCK_API_RESPONSE.dnsLookupMs),
+    tcpHandshakeMs: Number(source.tcpHandshakeMs ?? MOCK_API_RESPONSE.tcpHandshakeMs),
+    tlsHandshakeMs: Number(source.tlsHandshakeMs ?? MOCK_API_RESPONSE.tlsHandshakeMs),
+    requestMs: Number(source.requestMs ?? MOCK_API_RESPONSE.requestMs),
+    responseMs: Number(source.responseMs ?? MOCK_API_RESPONSE.responseMs),
+    browserRenderMs: Number(source.browserRenderMs ?? MOCK_API_RESPONSE.browserRenderMs),
+    serverRegion: source.serverRegion ?? MOCK_API_RESPONSE.serverRegion,
+    stageDetails:
+      source.stageDetails && typeof source.stageDetails === "object"
+        ? source.stageDetails
+        : undefined,
+    dnsDetails: source.dnsDetails,
+    tcpDetails: source.tcpDetails,
+    tlsDetails: source.tlsDetails,
+    reqDetails: source.reqDetails,
+    resDetails: source.resDetails,
+    bndDetails: source.bndDetails
+  };
 };
 
 const STAGE_DETAILS = {
@@ -147,6 +175,12 @@ const buildTimeline = (payloadData) => {
   return { total, rows };
 };
 
+const joinApiPath = (base, path) => {
+  const normalizedBase = base.endsWith("/") ? base.slice(0, -1) : base;
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return `${normalizedBase}${normalizedPath}`;
+};
+
 function App() {
   const [url, setUrl] = useState(MOCK_API_RESPONSE.url);
   const [activeStage, setActiveStage] = useState(0);
@@ -206,21 +240,26 @@ function App() {
     setIsRunning(true);
     resetRun();
 
-    let nextPayload = MOCK_API_RESPONSE;
+    let nextPayload = null;
+    const analyzeUrl = `${joinApiPath(API_BASE_URL, "/analyze")}?url=${encodeURIComponent(url)}`;
+
     try {
-      const response = await fetch(
-        `${BACKEND_BASE_URL}/api/analyze?url=${encodeURIComponent(url)}`
-      );
+      const response = await fetch(analyzeUrl);
       if (response.ok) {
-        nextPayload = await response.json();
-        appendLog(`> [API] Backend payload loaded (${BACKEND_BASE_URL})`, 0);
+        const body = await response.json();
+        nextPayload = parsePayload(body);
+        appendLog(`> [API] Backend payload loaded (${API_BASE_URL})`, 0);
       } else {
-        appendLog(
-          `> [API] Backend returned ${response.status}, using local mock JSON`,
-          0
-        );
+        throw new Error(`Backend returned ${response.status}`);
       }
-    } catch {
+    } catch (error) {
+      if (!USE_MOCK_ON_ERROR) {
+        appendLog(`> [API] ${error.message}. Mock fallback disabled.`, 0);
+        setIsRunning(false);
+        return;
+      }
+
+      nextPayload = MOCK_API_RESPONSE;
       appendLog("> [API] Backend is unreachable, using local mock JSON", 0);
     }
 
