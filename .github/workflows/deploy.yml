@@ -116,6 +116,23 @@ jobs:
               fi
             }
 
+            http_check() {
+              URL="$1"
+
+              # Preferred check: host curl
+              if command -v curl >/dev/null 2>&1; then
+                curl -fsS --max-time 5 "$URL" >/dev/null 2>&1 && return 0
+              fi
+
+              # Fallback: host wget
+              if command -v wget >/dev/null 2>&1; then
+                wget -q --spider --timeout=5 "$URL" >/dev/null 2>&1 && return 0
+              fi
+
+              # Last fallback: dockerized curl (works even if host has no curl/wget)
+              docker run --rm --network host curlimages/curl:8.12.1 -fsS --max-time 5 "$URL" >/dev/null 2>&1
+            }
+
             if ! has_compose_file "$APP_DIR"; then
               echo ">>> Docker compose file not found in $APP_DIR"
               echo ">>> Searching common directories for compose file..."
@@ -153,7 +170,7 @@ jobs:
             HEALTHY=false
             for i in $(seq 1 9); do
               sleep 10
-              if curl -sf http://localhost:3000 > /dev/null 2>&1; then
+              if http_check "http://localhost:3000"; then
                 echo ">>> Healthy after ${i}0s!"
                 HEALTHY=true
                 break
