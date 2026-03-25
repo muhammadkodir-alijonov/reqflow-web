@@ -295,7 +295,7 @@ function App() {
   const [errorMessage, setErrorMessage] = useState("");
   const [hasAnalyzed, setHasAnalyzed] = useState(false);
   const [totalVisits, setTotalVisits] = useState(0);
-  const [visitorStatus, setVisitorStatus] = useState("connecting");
+  const [, setVisitorStatus] = useState("connecting");
   const [activeStage, setActiveStage] = useState(0);
   const [focusedStage, setFocusedStage] = useState(0);
   const [barProgress, setBarProgress] = useState(
@@ -555,13 +555,7 @@ function App() {
             </p>
             <div className="rounded-xl border border-emerald-400/40 bg-emerald-400/10 px-3 py-2 text-right">
               <p className="font-['Share_Tech_Mono'] text-[10px] uppercase tracking-[0.2em] text-emerald-200">
-                Total Visits
-              </p>
-              <p className="font-['Orbitron'] text-sm font-bold text-emerald-300">
-                {formatVisitsCompact(totalVisits)}
-                <span className="ml-2 text-[10px] uppercase tracking-[0.16em] text-emerald-200/70">
-                  {visitorStatus}
-                </span>
+                Total Visits {formatVisitsCompact(totalVisits)}
               </p>
             </div>
           </div>
