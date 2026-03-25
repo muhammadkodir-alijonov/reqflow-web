@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 const STAGES = [
   { key: "dnsLookupMs", short: "DNS", label: "DNS Lookup", color: "#f97316" },
@@ -9,8 +9,10 @@ const STAGES = [
   { key: "browserRenderMs", short: "BND", label: "Browser Render", color: "#ec4899" }
 ];
 
+const DEFAULT_TARGET_URL = "https://muhammadqodir.com";
+
 const MOCK_API_RESPONSE = {
-  url: "https://example.com/index.html",
+  url: DEFAULT_TARGET_URL,
   dnsLookupMs: 20,
   tcpHandshakeMs: 10,
   tlsHandshakeMs: 30,
@@ -18,6 +20,17 @@ const MOCK_API_RESPONSE = {
   responseMs: 48,
   browserRenderMs: 16,
   serverRegion: "ap-southeast"
+};
+
+const EMPTY_PAYLOAD = {
+  url: DEFAULT_TARGET_URL,
+  dnsLookupMs: 0,
+  tcpHandshakeMs: 0,
+  tlsHandshakeMs: 0,
+  requestMs: 0,
+  responseMs: 0,
+  browserRenderMs: 0,
+  serverRegion: "-"
 };
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
@@ -156,8 +169,8 @@ const STAGE_DETAILS = {
       { left: "Browser checks cache", right: "cached? no" },
       { left: "OS resolver queried", right: "asking system" },
       { left: "Root nameserver ->", right: ".com" },
-      { left: "TLD nameserver ->", right: "example.com" },
-      { left: "IP returned: 93.184.216.34", right: "ready" }
+      { left: "TLD nameserver ->", right: "muhammadqodir.com" },
+      { left: "IP returned", right: "ready" }
     ]
   },
   TCP: {
@@ -182,8 +195,8 @@ const STAGE_DETAILS = {
   REQ: {
     title: "HTTP Request",
     notes: [
-      { left: "GET /index.html HTTP/2", right: "method + path" },
-      { left: "Host: example.com", right: "header" },
+      { left: "GET / HTTP/2", right: "method + path" },
+      { left: "Host: muhammadqodir.com", right: "header" },
       { left: "Accept: text/html", right: "header" },
       { left: "Cookie: session=abc", right: "header" },
       { left: "Request sent ->", right: "encrypted" }
@@ -226,6 +239,7 @@ const getStageDetail = (payloadData, stageShort, fallbackDuration) => {
 
 const buildTimeline = (payloadData) => {
   const total = STAGES.reduce((sum, stage) => sum + payloadData[stage.key], 0);
+  const safeTotal = total > 0 ? total : 1;
   let cursor = 0;
 
   const rows = STAGES.map((stage) => {
@@ -234,8 +248,8 @@ const buildTimeline = (payloadData) => {
       ...stage,
       duration,
       startMs: cursor,
-      startPct: (cursor / total) * 100,
-      widthPct: (duration / total) * 100
+      startPct: (cursor / safeTotal) * 100,
+      widthPct: (duration / safeTotal) * 100
     };
     cursor += duration;
     return row;
@@ -251,8 +265,12 @@ const joinApiPath = (base, path) => {
 };
 
 function App() {
-  const [url, setUrl] = useState(MOCK_API_RESPONSE.url);
+  const [url, setUrl] = useState(DEFAULT_TARGET_URL);
   const [errorMessage, setErrorMessage] = useState("");
+  const [hasAnalyzed, setHasAnalyzed] = useState(false);
+  const [activeVisitors, setActiveVisitors] = useState(0);
+  const [visitorStatus, setVisitorStatus] = useState("connecting");
+  const clientIdRef = useRef("");
   const [activeStage, setActiveStage] = useState(0);
   const [focusedStage, setFocusedStage] = useState(0);
   const [barProgress, setBarProgress] = useState(
@@ -264,11 +282,78 @@ function App() {
     Object.fromEntries(STAGES.map((stage) => [stage.short, 0]))
   );
 
-  const [payload, setPayload] = useState(MOCK_API_RESPONSE);
+  const [payload, setPayload] = useState(EMPTY_PAYLOAD);
   const { total: totalMs, rows: timeline } = useMemo(
     () => buildTimeline(payload),
     [payload]
   );
+
+  useEffect(() => {
+    if (clientIdRef.current) {
+      return;
+    }
+
+    const existingClientId =
+      typeof window !== "undefined" ? window.localStorage.getItem("reqflow-client-id") : null;
+
+    if (existingClientId) {
+      clientIdRef.current = existingClientId;
+      return;
+    }
+
+    const generatedId =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `visitor-${Date.now()}-${Math.round(Math.random() * 100000)}`;
+
+    clientIdRef.current = generatedId;
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("reqflow-client-id", generatedId);
+    }
+  }, []);
+
+  useEffect(() => {
+    let isUnmounted = false;
+
+    const syncVisitors = async () => {
+      const clientId = clientIdRef.current;
+      if (!clientId) {
+        return;
+      }
+
+      try {
+        const pingUrl = `${joinApiPath(
+          API_BASE_URL,
+          "/visitors/ping"
+        )}?clientId=${encodeURIComponent(clientId)}`;
+        const response = await fetch(pingUrl);
+
+        if (!response.ok) {
+          throw new Error(`Visitor API status ${response.status}`);
+        }
+
+        const body = await response.json();
+        const count = Number(body?.activeVisitors ?? 0);
+        if (!isUnmounted) {
+          setActiveVisitors(Number.isFinite(count) && count >= 0 ? count : 0);
+          setVisitorStatus("live");
+        }
+      } catch {
+        if (!isUnmounted) {
+          setVisitorStatus("offline");
+        }
+      }
+    };
+
+    const timeoutId = setTimeout(syncVisitors, 120);
+    const intervalId = setInterval(syncVisitors, 5000);
+
+    return () => {
+      isUnmounted = true;
+      clearTimeout(timeoutId);
+      clearInterval(intervalId);
+    };
+  }, []);
 
   const appendLog = (text, stageIndex) =>
     setLogs((prev) => [...prev, { text, stageIndex }]);
@@ -289,6 +374,7 @@ function App() {
   );
 
   const resetRun = (targetUrl) => {
+    setHasAnalyzed(false);
     setActiveStage(0);
     setFocusedStage(0);
     setLogs([
@@ -381,6 +467,7 @@ function App() {
     }
 
     appendLog(`> [API] Payload ready (${runMetrics.total}ms total)`, 0);
+    setHasAnalyzed(true);
     await wait(250);
 
     for (let i = 0; i < runMetrics.rows.length; i += 1) {
@@ -433,9 +520,22 @@ function App() {
 
       <section className="relative mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-10 sm:px-6 lg:px-8">
         <header className="space-y-3">
-          <p className="font-mono text-xs uppercase tracking-[0.45em] text-slate-400">
-            Network - Browser
-          </p>
+          <div className="flex items-center justify-between gap-3">
+            <p className="font-mono text-xs uppercase tracking-[0.45em] text-slate-400">
+              Network - Browser
+            </p>
+            <div className="rounded-xl border border-emerald-400/40 bg-emerald-400/10 px-3 py-2 text-right">
+              <p className="font-['Share_Tech_Mono'] text-[10px] uppercase tracking-[0.2em] text-emerald-200">
+                Active Visitors
+              </p>
+              <p className="font-['Orbitron'] text-sm font-bold text-emerald-300">
+                {activeVisitors}
+                <span className="ml-2 text-[10px] uppercase tracking-[0.16em] text-emerald-200/70">
+                  {visitorStatus}
+                </span>
+              </p>
+            </div>
+          </div>
           <h1 className="title-glow text-3xl font-extrabold uppercase tracking-[0.05em] sm:text-5xl">
             HTTP Request Lifecycle
           </h1>
@@ -449,7 +549,7 @@ function App() {
             <input
               value={url}
               onChange={(event) => setUrl(event.target.value)}
-              placeholder="https://example.com/index.html"
+              placeholder="https://muhammadqodir.com"
               className="h-12 flex-1 rounded-xl border border-slate-700/70 bg-slate-900/80 px-4 font-['Share_Tech_Mono'] text-sm text-slate-100 outline-none transition focus:border-cyan-400/70 focus:shadow-neon"
             />
             <button
@@ -492,7 +592,9 @@ function App() {
                   </button>
                   <div className="text-center font-['Space_Grotesk'] text-[10px] font-semibold text-slate-300">
                     {stage.label}
-                    <p className="font-mono text-[10px] text-slate-500">~{stage.duration}ms</p>
+                    <p className="font-mono text-[10px] text-slate-500">
+                      {hasAnalyzed ? `~${stage.duration}ms` : "0ms"}
+                    </p>
                   </div>
                 </div>
               );
@@ -524,7 +626,7 @@ function App() {
                   {detail.title}
                 </p>
                 <p className="font-['Share_Tech_Mono'] text-xs text-slate-500">
-                  typical: ~{detail.durationMs}ms
+                  typical: {hasAnalyzed ? `~${detail.durationMs}ms` : "0ms"}
                 </p>
               </div>
             </div>
@@ -566,7 +668,9 @@ function App() {
             <p className="font-mono text-xs uppercase tracking-[0.35em] text-slate-500">
               Timing Waterfall
             </p>
-            <p className="font-['Share_Tech_Mono'] text-sm text-cyan-300">total: ~{totalMs}ms</p>
+            <p className="font-['Share_Tech_Mono'] text-sm text-cyan-300">
+              total: {hasAnalyzed ? `~${totalMs}ms` : "0ms"}
+            </p>
           </div>
 
           <div className="space-y-3">
@@ -596,7 +700,7 @@ function App() {
                   />
                 </div>
                 <span className="font-['Share_Tech_Mono'] text-right text-xs text-slate-400">
-                  {focusedStage >= idx ? `~${stage.duration}ms` : ""}
+                  {hasAnalyzed && focusedStage >= idx ? `~${stage.duration}ms` : "0ms"}
                 </span>
               </div>
             ))}
