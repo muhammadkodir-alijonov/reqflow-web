@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const STAGES = [
   { key: "dnsLookupMs", short: "DNS", label: "DNS Lookup", color: "#f97316" },
@@ -264,13 +264,37 @@ const joinApiPath = (base, path) => {
   return `${normalizedBase}${normalizedPath}`;
 };
 
+const formatVisitsCompact = (value) => {
+  const safeValue = Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
+
+  const formatUnit = (number, divisor, suffix) => {
+    const normalized = number / divisor;
+    const precision = normalized < 10 ? 1 : 0;
+    const rounded = normalized.toFixed(precision).replace(/\.0$/, "");
+    return `${rounded}${suffix}`;
+  };
+
+  if (safeValue < 1_000) {
+    return String(Math.floor(safeValue));
+  }
+
+  if (safeValue < 1_000_000) {
+    return formatUnit(safeValue, 1_000, "k");
+  }
+
+  if (safeValue < 1_000_000_000) {
+    return formatUnit(safeValue, 1_000_000, "mln");
+  }
+
+  return formatUnit(safeValue, 1_000_000_000, "bln");
+};
+
 function App() {
   const [url, setUrl] = useState(DEFAULT_TARGET_URL);
   const [errorMessage, setErrorMessage] = useState("");
   const [hasAnalyzed, setHasAnalyzed] = useState(false);
-  const [activeVisitors, setActiveVisitors] = useState(0);
+  const [totalVisits, setTotalVisits] = useState(0);
   const [visitorStatus, setVisitorStatus] = useState("connecting");
-  const clientIdRef = useRef("");
   const [activeStage, setActiveStage] = useState(0);
   const [focusedStage, setFocusedStage] = useState(0);
   const [barProgress, setBarProgress] = useState(
@@ -289,53 +313,20 @@ function App() {
   );
 
   useEffect(() => {
-    if (clientIdRef.current) {
-      return;
-    }
-
-    const existingClientId =
-      typeof window !== "undefined" ? window.localStorage.getItem("reqflow-client-id") : null;
-
-    if (existingClientId) {
-      clientIdRef.current = existingClientId;
-      return;
-    }
-
-    const generatedId =
-      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-        ? crypto.randomUUID()
-        : `visitor-${Date.now()}-${Math.round(Math.random() * 100000)}`;
-
-    clientIdRef.current = generatedId;
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem("reqflow-client-id", generatedId);
-    }
-  }, []);
-
-  useEffect(() => {
     let isUnmounted = false;
 
-    const syncVisitors = async () => {
-      const clientId = clientIdRef.current;
-      if (!clientId) {
-        return;
-      }
-
+    const pullTotalVisits = async () => {
       try {
-        const pingUrl = `${joinApiPath(
-          API_BASE_URL,
-          "/visitors/ping"
-        )}?clientId=${encodeURIComponent(clientId)}`;
-        const response = await fetch(pingUrl);
+        const response = await fetch(joinApiPath(API_BASE_URL, "/visitors/total"));
 
         if (!response.ok) {
           throw new Error(`Visitor API status ${response.status}`);
         }
 
         const body = await response.json();
-        const count = Number(body?.activeVisitors ?? 0);
+        const count = Number(body?.totalVisits ?? 0);
         if (!isUnmounted) {
-          setActiveVisitors(Number.isFinite(count) && count >= 0 ? count : 0);
+          setTotalVisits(Number.isFinite(count) && count >= 0 ? count : 0);
           setVisitorStatus("live");
         }
       } catch {
@@ -345,8 +336,33 @@ function App() {
       }
     };
 
-    const timeoutId = setTimeout(syncVisitors, 120);
-    const intervalId = setInterval(syncVisitors, 5000);
+    const registerVisit = async () => {
+      try {
+        const response = await fetch(joinApiPath(API_BASE_URL, "/visitors/hit"), {
+          method: "POST"
+        });
+
+        if (!response.ok) {
+          throw new Error(`Visitor API status ${response.status}`);
+        }
+
+        const body = await response.json();
+        const count = Number(body?.totalVisits ?? 0);
+        if (!isUnmounted) {
+          setTotalVisits(Number.isFinite(count) && count >= 0 ? count : 0);
+          setVisitorStatus("live");
+        }
+      } catch {
+        if (!isUnmounted) {
+          setVisitorStatus("offline");
+        }
+      }
+    };
+
+    registerVisit();
+
+    const timeoutId = setTimeout(pullTotalVisits, 1200);
+    const intervalId = setInterval(pullTotalVisits, 5000);
 
     return () => {
       isUnmounted = true;
@@ -526,10 +542,10 @@ function App() {
             </p>
             <div className="rounded-xl border border-emerald-400/40 bg-emerald-400/10 px-3 py-2 text-right">
               <p className="font-['Share_Tech_Mono'] text-[10px] uppercase tracking-[0.2em] text-emerald-200">
-                Active Visitors
+                Total Visits
               </p>
               <p className="font-['Orbitron'] text-sm font-bold text-emerald-300">
-                {activeVisitors}
+                {formatVisitsCompact(totalVisits)}
                 <span className="ml-2 text-[10px] uppercase tracking-[0.16em] text-emerald-200/70">
                   {visitorStatus}
                 </span>
