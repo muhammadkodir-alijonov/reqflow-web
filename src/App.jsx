@@ -37,6 +37,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
 const USE_MOCK_ON_ERROR =
   String(import.meta.env.VITE_USE_MOCK_ON_ERROR ?? "false").toLowerCase() ===
   "true";
+const VISIT_SESSION_KEY = "reqflow-visit-registered";
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -338,6 +339,14 @@ function App() {
 
     const registerVisit = async () => {
       try {
+        const alreadyRegisteredInSession =
+          typeof window !== "undefined" && window.sessionStorage.getItem(VISIT_SESSION_KEY) === "1";
+
+        if (alreadyRegisteredInSession) {
+          await pullTotalVisits();
+          return;
+        }
+
         const response = await fetch(joinApiPath(API_BASE_URL, "/visitors/hit"), {
           method: "POST"
         });
@@ -351,6 +360,10 @@ function App() {
         if (!isUnmounted) {
           setTotalVisits(Number.isFinite(count) && count >= 0 ? count : 0);
           setVisitorStatus("live");
+
+          if (typeof window !== "undefined") {
+            window.sessionStorage.setItem(VISIT_SESSION_KEY, "1");
+          }
         }
       } catch {
         if (!isUnmounted) {
