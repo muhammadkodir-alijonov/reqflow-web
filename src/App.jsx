@@ -36,6 +36,9 @@ const EMPTY_PAYLOAD = {
 };
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
+const ANALYZE_FORCE_COLD =
+  String(import.meta.env.VITE_ANALYZE_FORCE_COLD ?? "false").toLowerCase() ===
+  "true";
 const USE_MOCK_ON_ERROR =
   String(import.meta.env.VITE_USE_MOCK_ON_ERROR ?? "false").toLowerCase() ===
   "true";
@@ -593,7 +596,7 @@ function App() {
     let nextPayload = null;
     const analyzeUrl = `${joinApiPath(API_BASE_URL, "/analyze")}?url=${encodeURIComponent(
       targetUrl
-    )}&_t=${Date.now()}`;
+    )}&cold=${ANALYZE_FORCE_COLD ? "true" : "false"}&_t=${Date.now()}`;
 
     try {
       const response = await fetch(analyzeUrl, {
