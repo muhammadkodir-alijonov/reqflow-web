@@ -591,10 +591,14 @@ function App() {
     setUrl(targetUrl);
 
     let nextPayload = null;
-    const analyzeUrl = `${joinApiPath(API_BASE_URL, "/analyze")}?url=${encodeURIComponent(targetUrl)}`;
+    const analyzeUrl = `${joinApiPath(API_BASE_URL, "/analyze")}?url=${encodeURIComponent(
+      targetUrl
+    )}&_t=${Date.now()}`;
 
     try {
-      const response = await fetch(analyzeUrl);
+      const response = await fetch(analyzeUrl, {
+        cache: "no-store"
+      });
       if (response.ok) {
         const body = await response.json();
         nextPayload = parsePayload(body);
