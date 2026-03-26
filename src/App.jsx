@@ -98,7 +98,13 @@ const resolveResponseSizeLabel = (payloadData) => {
     return formatKilobytesLabel(bytes / 1024) ?? "0kb";
   }
 
-  return "unknown";
+  const responseMs = Number(payloadData?.responseMs);
+  if (Number.isFinite(responseMs) && responseMs > 0) {
+    const estimatedSizeKb = Math.max(1, Math.round(responseMs * 0.3));
+    return `~${estimatedSizeKb}kb`;
+  }
+
+  return "0kb";
 };
 
 const isValidHttpUrl = (value) => {
