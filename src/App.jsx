@@ -102,6 +102,127 @@ const normalizeNotes = (notes, fallbackNotes) => {
     .filter(Boolean);
 };
 
+const getHostInfoFromUrl = (value) => {
+  try {
+    const parsed = new URL(value);
+    const hostname = parsed.hostname;
+    const labels = hostname.split(".").filter(Boolean);
+    const tld = labels.length > 0 ? labels[labels.length - 1] : "com";
+    const zone = labels.length >= 2 ? labels.slice(-2).join(".") : hostname;
+
+    return {
+      protocol: parsed.protocol,
+      hostname,
+      tld,
+      zone,
+      path: `${parsed.pathname || "/"}${parsed.search || ""}`
+    };
+  } catch {
+    return {
+      protocol: "https:",
+      hostname: "example.com",
+      tld: "com",
+      zone: "example.com",
+      path: "/"
+    };
+  }
+};
+
+const toHttpVersionLabel = (rawVersion, protocol) => {
+  const value = String(rawVersion ?? "")
+    .trim()
+    .toLowerCase();
+
+  if (["1", "1.0", "http/1", "http/1.0"].includes(value)) {
+    return "HTTP/1.0";
+  }
+
+  if (["1.1", "http/1.1"].includes(value)) {
+    return "HTTP/1.1";
+  }
+
+  if (["2", "2.0", "h2", "http/2", "http/2.0"].includes(value)) {
+    return "HTTP/2";
+  }
+
+  if (["3", "3.0", "h3", "http/3", "http/3.0", "quic"].includes(value)) {
+    return "HTTP/3";
+  }
+
+  if (protocol === "http:") {
+    return "HTTP/1.1";
+  }
+
+  return "HTTP/2 or HTTP/3";
+};
+
+const buildDefaultStageDetails = (payloadData) => {
+  const hostInfo = getHostInfoFromUrl(payloadData?.url ?? DEFAULT_TARGET_URL);
+  const httpVersion = toHttpVersionLabel(payloadData?.httpVersion, hostInfo.protocol);
+
+  return {
+    DNS: {
+      title: "DNS Lookup",
+      notes: [
+        { left: "Browser checks cache", right: "cached? no" },
+        { left: "OS resolver queried", right: "asking system" },
+        { left: "Root nameserver ->", right: `.${hostInfo.tld}` },
+        { left: "TLD nameserver ->", right: hostInfo.zone },
+        { left: "IP returned", right: "ready" }
+      ]
+    },
+    TCP: {
+      title: "TCP Handshake",
+      notes: [
+        { left: "SYN ->", right: "client -> server" },
+        { left: "<- SYN-ACK", right: "server -> client" },
+        { left: "ACK ->", right: "client -> server" },
+        { left: "Connection established", right: "socket open" }
+      ]
+    },
+    TLS: {
+      title: "TLS Handshake",
+      notes: [
+        { left: "ClientHello ->", right: "cipher suites" },
+        { left: "<- ServerHello + cert", right: "server chooses" },
+        { left: "Certificate verified", right: "CA trusted" },
+        { left: "Keys exchanged", right: "ECDHE" },
+        { left: "Encrypted tunnel", right: "TLS HTTPS" }
+      ]
+    },
+    REQ: {
+      title: "HTTP Request",
+      notes: [
+        { left: `GET ${hostInfo.path} ${httpVersion}`, right: "method + path" },
+        { left: `Host: ${hostInfo.hostname}`, right: "header" },
+        { left: "Accept: text/html", right: "header" },
+        { left: "Cookie: session=abc", right: "header" },
+        { left: "Request sent ->", right: "encrypted" }
+      ]
+    },
+    RES: {
+      title: "HTTP Response",
+      notes: [
+        { left: `<- ${httpVersion} 200 OK`, right: "status" },
+        { left: "Content-Type: text/html", right: "header" },
+        { left: "Cache-Control: max-age", right: "header" },
+        { left: "Body: <html>...", right: "payload" },
+        { left: "Response received", right: "14kb" }
+      ]
+    },
+    BND: {
+      title: "Browser Render",
+      notes: [
+        { left: "HTML parsed -> DOM", right: "tree built" },
+        { left: "CSS parsed -> CSSOM", right: "styles computed" },
+        { left: "Render tree created", right: "dom + cssom" },
+        { left: "Layout calculated", right: "box positions" },
+        { left: "Paint complete", right: "visible" }
+      ]
+    }
+  };
+};
+
 const parsePayload = (raw) => {
   const source = raw?.data ?? raw ?? {};
   const timings = source.timings ?? {};
@@ -159,74 +280,22 @@ const parsePayload = (raw) => {
     tlsDetails: source.tlsDetails,
     reqDetails: source.reqDetails,
     resDetails: source.resDetails,
-    bndDetails: source.bndDetails
+    bndDetails: source.bndDetails,
+    httpVersion:
+      source.httpVersion ??
+      source.protocolVersion ??
+      timings.httpVersion ??
+      timings.protocolVersion ??
+      source.http?.version ??
+      source.response?.httpVersion ??
+      source.reqDetails?.httpVersion ??
+      source.resDetails?.httpVersion ??
+      source.stageDetails?.REQ?.httpVersion
   };
 };
 
-const STAGE_DETAILS = {
-  DNS: {
-    title: "DNS Lookup",
-    notes: [
-      { left: "Browser checks cache", right: "cached? no" },
-      { left: "OS resolver queried", right: "asking system" },
-      { left: "Root nameserver ->", right: ".com" },
-      { left: "TLD nameserver ->", right: "muhammadqodir.com" },
-      { left: "IP returned", right: "ready" }
-    ]
-  },
-  TCP: {
-    title: "TCP Handshake",
-    notes: [
-      { left: "SYN ->", right: "client -> server" },
-      { left: "<- SYN-ACK", right: "server -> client" },
-      { left: "ACK ->", right: "client -> server" },
-      { left: "Connection established", right: "socket open" }
-    ]
-  },
-  TLS: {
-    title: "TLS Handshake",
-    notes: [
-      { left: "ClientHello ->", right: "cipher suites" },
-      { left: "<- ServerHello + cert", right: "server chooses" },
-      { left: "Certificate verified", right: "CA trusted" },
-      { left: "Keys exchanged", right: "ECDHE" },
-      { left: "Encrypted tunnel", right: "TLS HTTPS" }
-    ]
-  },
-  REQ: {
-    title: "HTTP Request",
-    notes: [
-      { left: "GET / HTTP/2", right: "method + path" },
-      { left: "Host: muhammadqodir.com", right: "header" },
-      { left: "Accept: text/html", right: "header" },
-      { left: "Cookie: session=abc", right: "header" },
-      { left: "Request sent ->", right: "encrypted" }
-    ]
-  },
-  RES: {
-    title: "HTTP Response",
-    notes: [
-      { left: "<- HTTP/2 200 OK", right: "status" },
-      { left: "Content-Type: text/html", right: "header" },
-      { left: "Cache-Control: max-age", right: "header" },
-      { left: "Body: <html>...", right: "payload" },
-      { left: "Response received", right: "14kb" }
-    ]
-  },
-  BND: {
-    title: "Browser Render",
-    notes: [
-      { left: "HTML parsed -> DOM", right: "tree built" },
-      { left: "CSS parsed -> CSSOM", right: "styles computed" },
-      { left: "Render tree created", right: "dom + cssom" },
-      { left: "Layout calculated", right: "box positions" },
-      { left: "Paint complete", right: "visible" }
-    ]
-  }
-};
-
 const getStageDetail = (payloadData, stageShort, fallbackDuration) => {
-  const fallback = STAGE_DETAILS[stageShort];
+  const fallback = buildDefaultStageDetails(payloadData)[stageShort];
   const payloadDetails = payloadData?.stageDetails?.[stageShort];
   const payloadDetailsByKey = payloadData?.[`${stageShort.toLowerCase()}Details`];
   const source = payloadDetails ?? payloadDetailsByKey ?? null;

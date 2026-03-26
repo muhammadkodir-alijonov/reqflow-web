@@ -38,9 +38,31 @@ DNS -> TCP -> TLS -> REQ -> RES -> BND
 
 Frontend tries to fetch data from:
 
-http://localhost:8080/api/lifecycle?url=<encoded_url>
+http://localhost:8080/api/analyze?url=<encoded_url>
 
 If backend is not available, app automatically falls back to local mock JSON data.
+
+Recommended backend response contract:
+
+```json
+{
+	"url": "https://example.com",
+	"httpVersion": "2",
+	"dnsLookupMs": 21,
+	"tcpHandshakeMs": 12,
+	"tlsHandshakeMs": 34,
+	"requestMs": 15,
+	"responseMs": 40,
+	"browserRenderMs": 16,
+	"serverRegion": "ap-southeast"
+}
+```
+
+Notes:
+
+- `httpVersion` should be one of: `1.1`, `2`, `3` (string or number-like string).
+- Frontend maps these to labels: `HTTP/1.1`, `HTTP/2`, `HTTP/3`.
+- If `httpVersion` is missing, frontend will use protocol-based fallback.
 
 ## CI/CD
 
