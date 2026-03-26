@@ -44,6 +44,9 @@ const USE_MOCK_ON_ERROR =
   "true";
 const VISIT_SESSION_KEY = "reqflow-visit-registered";
 const VISIT_TOTAL_CACHE_KEY = "reqflow-total-visits-cache";
+const VISIT_TOTAL_CACHE_META_KEY = "reqflow-total-visits-cache-meta";
+const VISIT_TOTAL_CACHE_VERSION = "v2";
+const VISIT_TOTAL_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -453,12 +456,38 @@ const normalizeVisitCount = (value) => {
   return Math.floor(count);
 };
 
+const resolveBackendVisitCount = (value, fallback = 0) => {
+  const parsed = Number(value);
+  if (Number.isFinite(parsed) && parsed >= 0) {
+    return Math.floor(parsed);
+  }
+
+  return normalizeVisitCount(fallback);
+};
+
 const getCachedVisitTotal = () => {
   if (typeof window === "undefined") {
     return 0;
   }
 
   try {
+    const metaRaw = window.localStorage.getItem(VISIT_TOTAL_CACHE_META_KEY);
+    if (!metaRaw) {
+      window.localStorage.removeItem(VISIT_TOTAL_CACHE_KEY);
+      return 0;
+    }
+
+    const meta = JSON.parse(metaRaw);
+    const isCorrectVersion = meta?.version === VISIT_TOTAL_CACHE_VERSION;
+    const updatedAt = Number(meta?.updatedAt ?? 0);
+    const isFresh = Number.isFinite(updatedAt) && Date.now() - updatedAt <= VISIT_TOTAL_CACHE_TTL_MS;
+
+    if (!isCorrectVersion || !isFresh) {
+      window.localStorage.removeItem(VISIT_TOTAL_CACHE_KEY);
+      window.localStorage.removeItem(VISIT_TOTAL_CACHE_META_KEY);
+      return 0;
+    }
+
     return normalizeVisitCount(window.localStorage.getItem(VISIT_TOTAL_CACHE_KEY));
   } catch {
     return 0;
@@ -471,19 +500,18 @@ const setCachedVisitTotal = (value) => {
   }
 
   try {
-    window.localStorage.setItem(VISIT_TOTAL_CACHE_KEY, String(normalizeVisitCount(value)));
+    const normalized = normalizeVisitCount(value);
+    window.localStorage.setItem(VISIT_TOTAL_CACHE_KEY, String(normalized));
+    window.localStorage.setItem(
+      VISIT_TOTAL_CACHE_META_KEY,
+      JSON.stringify({
+        version: VISIT_TOTAL_CACHE_VERSION,
+        updatedAt: Date.now()
+      })
+    );
   } catch {
     // no-op: storage can fail in restricted browser modes
   }
-};
-
-const resolveStableVisitTotal = (incomingCount, currentCount) => {
-  const safeIncoming = normalizeVisitCount(incomingCount);
-  const safeCurrent = normalizeVisitCount(currentCount);
-  const cached = getCachedVisitTotal();
-  const resolved = Math.max(safeIncoming, safeCurrent, cached);
-  setCachedVisitTotal(resolved);
-  return resolved;
 };
 
 function App() {
@@ -523,9 +551,11 @@ function App() {
         const body = await response.json();
         const count = body?.totalVisits;
         if (!isUnmounted) {
-          setTotalVisits((previousTotal) =>
-            resolveStableVisitTotal(count, previousTotal)
-          );
+          setTotalVisits((previousTotal) => {
+            const nextTotal = resolveBackendVisitCount(count, previousTotal);
+            setCachedVisitTotal(nextTotal);
+            return nextTotal;
+          });
           setVisitorStatus("live");
         }
       } catch {
@@ -556,9 +586,11 @@ function App() {
         const body = await response.json();
         const count = body?.totalVisits;
         if (!isUnmounted) {
-          setTotalVisits((previousTotal) =>
-            resolveStableVisitTotal(count, previousTotal)
-          );
+          setTotalVisits((previousTotal) => {
+            const nextTotal = resolveBackendVisitCount(count, previousTotal);
+            setCachedVisitTotal(nextTotal);
+            return nextTotal;
+          });
           setVisitorStatus("live");
 
           if (typeof window !== "undefined") {
