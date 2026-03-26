@@ -44,7 +44,6 @@ const USE_MOCK_ON_ERROR =
   "true";
 const VISIT_SESSION_KEY = "reqflow-visit-registered";
 const VISIT_TOTAL_CACHE_KEY = "reqflow-total-visits-cache";
-const VISIT_TOTAL_SEED = 150;
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -456,14 +455,13 @@ const normalizeVisitCount = (value) => {
 
 const getCachedVisitTotal = () => {
   if (typeof window === "undefined") {
-    return VISIT_TOTAL_SEED;
+    return 0;
   }
 
   try {
-    const stored = normalizeVisitCount(window.localStorage.getItem(VISIT_TOTAL_CACHE_KEY));
-    return stored > 0 ? stored : VISIT_TOTAL_SEED;
+    return normalizeVisitCount(window.localStorage.getItem(VISIT_TOTAL_CACHE_KEY));
   } catch {
-    return VISIT_TOTAL_SEED;
+    return 0;
   }
 };
 
