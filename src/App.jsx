@@ -19,6 +19,7 @@ const MOCK_API_RESPONSE = {
   requestMs: 14,
   responseMs: 48,
   browserRenderMs: 16,
+  responseSizeBytes: 14336,
   serverRegion: "ap-southeast"
 };
 
@@ -30,6 +31,7 @@ const EMPTY_PAYLOAD = {
   requestMs: 0,
   responseMs: 0,
   browserRenderMs: 0,
+  responseSizeBytes: 0,
   serverRegion: "-"
 };
 
@@ -63,6 +65,40 @@ const pickDuration = (candidates, fallbackValue = 0) => {
   }
 
   return fallbackValue;
+};
+
+const formatKilobytesLabel = (value) => {
+  const normalized = Number(value);
+  if (!Number.isFinite(normalized) || normalized < 0) {
+    return null;
+  }
+
+  const precise = normalized.toFixed(2).replace(/\.?0+$/, "");
+  return `${precise}kb`;
+};
+
+const resolveResponseSizeLabel = (payloadData) => {
+  const explicitLabel = payloadData?.responseSizeLabel;
+  if (typeof explicitLabel === "string" && explicitLabel.trim()) {
+    return explicitLabel.trim();
+  }
+
+  const responseSizeRaw = payloadData?.responseSize;
+  if (typeof responseSizeRaw === "string" && responseSizeRaw.trim()) {
+    return responseSizeRaw.trim();
+  }
+
+  const kbLabel = formatKilobytesLabel(payloadData?.responseSizeKb);
+  if (kbLabel) {
+    return kbLabel;
+  }
+
+  const bytes = Number(payloadData?.responseSizeBytes);
+  if (Number.isFinite(bytes) && bytes >= 0) {
+    return formatKilobytesLabel(bytes / 1024) ?? "0kb";
+  }
+
+  return "unknown";
 };
 
 const isValidHttpUrl = (value) => {
@@ -159,6 +195,7 @@ const toHttpVersionLabel = (rawVersion, protocol) => {
 const buildDefaultStageDetails = (payloadData) => {
   const hostInfo = getHostInfoFromUrl(payloadData?.url ?? DEFAULT_TARGET_URL);
   const httpVersion = toHttpVersionLabel(payloadData?.httpVersion, hostInfo.protocol);
+  const responseSizeLabel = resolveResponseSizeLabel(payloadData);
 
   return {
     DNS: {
@@ -207,7 +244,7 @@ const buildDefaultStageDetails = (payloadData) => {
         { left: "Content-Type: text/html", right: "header" },
         { left: "Cache-Control: max-age", right: "header" },
         { left: "Body: <html>...", right: "payload" },
-        { left: "Response received", right: "14kb" }
+        { left: "Response received", right: responseSizeLabel }
       ]
     },
     BND: {
@@ -259,6 +296,35 @@ const parsePayload = (raw) => {
     (value) => Number.isFinite(Number(value)) && Number(value) >= 0
   );
 
+  const responseSizeLabelRaw = [
+    source.responseSizeLabel,
+    source.responseBodySizeLabel,
+    source.resDetails?.responseSizeLabel,
+    source.stageDetails?.RES?.responseSizeLabel,
+    source.response?.sizeLabel
+  ].find((value) => typeof value === "string" && value.trim());
+
+  const responseSizeKb = [
+    source.responseSizeKb,
+    source.responseBodySizeKb,
+    source.resDetails?.responseSizeKb,
+    source.stageDetails?.RES?.responseSizeKb,
+    source.response?.sizeKb,
+    timings.responseSizeKb
+  ].find((value) => Number.isFinite(Number(value)) && Number(value) >= 0);
+
+  const responseSizeBytes = [
+    source.responseSizeBytes,
+    source.responseBodyBytes,
+    source.responseBytes,
+    source.contentLength,
+    source.resDetails?.responseSizeBytes,
+    source.stageDetails?.RES?.responseSizeBytes,
+    source.response?.bytes,
+    source.response?.sizeBytes,
+    timings.responseSizeBytes
+  ].find((value) => Number.isFinite(Number(value)) && Number(value) >= 0);
+
   return {
     url: source.url ?? MOCK_API_RESPONSE.url,
     dnsLookupMs,
@@ -271,6 +337,15 @@ const parsePayload = (raw) => {
         ? null
         : Number(browserRenderRaw),
     serverRegion: source.serverRegion ?? MOCK_API_RESPONSE.serverRegion,
+    responseSizeLabel: responseSizeLabelRaw ? String(responseSizeLabelRaw).trim() : undefined,
+    responseSizeKb:
+      responseSizeKb === undefined || responseSizeKb === null
+        ? undefined
+        : Number(responseSizeKb),
+    responseSizeBytes:
+      responseSizeBytes === undefined || responseSizeBytes === null
+        ? undefined
+        : Number(responseSizeBytes),
     stageDetails:
       source.stageDetails && typeof source.stageDetails === "object"
         ? source.stageDetails
