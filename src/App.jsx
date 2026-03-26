@@ -43,6 +43,8 @@ const USE_MOCK_ON_ERROR =
   String(import.meta.env.VITE_USE_MOCK_ON_ERROR ?? "false").toLowerCase() ===
   "true";
 const VISIT_SESSION_KEY = "reqflow-visit-registered";
+const VISIT_TOTAL_CACHE_KEY = "reqflow-total-visits-cache";
+const VISIT_TOTAL_SEED = 150;
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -443,11 +445,54 @@ const formatVisitsCompact = (value) => {
   return formatUnit(safeValue, 1_000_000_000, "bln");
 };
 
+const normalizeVisitCount = (value) => {
+  const count = Number(value);
+  if (!Number.isFinite(count) || count < 0) {
+    return 0;
+  }
+
+  return Math.floor(count);
+};
+
+const getCachedVisitTotal = () => {
+  if (typeof window === "undefined") {
+    return VISIT_TOTAL_SEED;
+  }
+
+  try {
+    const stored = normalizeVisitCount(window.localStorage.getItem(VISIT_TOTAL_CACHE_KEY));
+    return stored > 0 ? stored : VISIT_TOTAL_SEED;
+  } catch {
+    return VISIT_TOTAL_SEED;
+  }
+};
+
+const setCachedVisitTotal = (value) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(VISIT_TOTAL_CACHE_KEY, String(normalizeVisitCount(value)));
+  } catch {
+    // no-op: storage can fail in restricted browser modes
+  }
+};
+
+const resolveStableVisitTotal = (incomingCount, currentCount) => {
+  const safeIncoming = normalizeVisitCount(incomingCount);
+  const safeCurrent = normalizeVisitCount(currentCount);
+  const cached = getCachedVisitTotal();
+  const resolved = Math.max(safeIncoming, safeCurrent, cached);
+  setCachedVisitTotal(resolved);
+  return resolved;
+};
+
 function App() {
   const [url, setUrl] = useState(DEFAULT_TARGET_URL);
   const [errorMessage, setErrorMessage] = useState("");
   const [hasAnalyzed, setHasAnalyzed] = useState(false);
-  const [totalVisits, setTotalVisits] = useState(0);
+  const [totalVisits, setTotalVisits] = useState(() => getCachedVisitTotal());
   const [, setVisitorStatus] = useState("connecting");
   const [activeStage, setActiveStage] = useState(0);
   const [focusedStage, setFocusedStage] = useState(0);
@@ -478,9 +523,11 @@ function App() {
         }
 
         const body = await response.json();
-        const count = Number(body?.totalVisits ?? 0);
+        const count = body?.totalVisits;
         if (!isUnmounted) {
-          setTotalVisits(Number.isFinite(count) && count >= 0 ? count : 0);
+          setTotalVisits((previousTotal) =>
+            resolveStableVisitTotal(count, previousTotal)
+          );
           setVisitorStatus("live");
         }
       } catch {
@@ -509,9 +556,11 @@ function App() {
         }
 
         const body = await response.json();
-        const count = Number(body?.totalVisits ?? 0);
+        const count = body?.totalVisits;
         if (!isUnmounted) {
-          setTotalVisits(Number.isFinite(count) && count >= 0 ? count : 0);
+          setTotalVisits((previousTotal) =>
+            resolveStableVisitTotal(count, previousTotal)
+          );
           setVisitorStatus("live");
 
           if (typeof window !== "undefined") {
