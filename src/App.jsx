@@ -829,8 +829,24 @@ function App() {
       <div className="absolute inset-0 opacity-60">
         <div className="hero-grid" />
       </div>
-      <div className="pointer-events-none absolute -top-40 left-1/2 h-[560px] w-[560px] -translate-x-1/2 rounded-full bg-cyan-400/20 blur-[170px]" />
-      <div className="pointer-events-none absolute bottom-0 right-0 h-[420px] w-[420px] rounded-full bg-fuchsia-500/20 blur-[140px]" />
+      <motion.div
+        className="pointer-events-none absolute -top-40 left-1/2 h-[560px] w-[560px] -translate-x-1/2 rounded-full bg-cyan-400/20 blur-[170px]"
+        animate={
+          shouldReduceMotion
+            ? undefined
+            : { scale: [1, 1.08, 1], opacity: [0.2, 0.28, 0.2] }
+        }
+        transition={{ duration: 10, repeat: Infinity, repeatType: "mirror", ease: "easeInOut" }}
+      />
+      <motion.div
+        className="pointer-events-none absolute bottom-0 right-0 h-[420px] w-[420px] rounded-full bg-fuchsia-500/20 blur-[140px]"
+        animate={
+          shouldReduceMotion
+            ? undefined
+            : { scale: [1, 1.1, 1], opacity: [0.2, 0.3, 0.2] }
+        }
+        transition={{ duration: 12, repeat: Infinity, repeatType: "mirror", ease: "easeInOut", delay: 1.5 }}
+      />
 
       <section className="relative mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-10 sm:px-6 lg:px-8">
         <motion.header
