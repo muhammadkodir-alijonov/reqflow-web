@@ -968,15 +968,16 @@ function App() {
           className="panel-glass rounded-2xl border border-slate-700/40 p-4 sm:p-5"
           style={{ boxShadow: `0 0 30px ${currentStage.color}26` }}
         >
-          <AnimatePresence>
-            <motion.div
-              key={currentStage.short}
-              initial={{ opacity: 0, x: 12 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -12 }}
-              transition={{ duration: 0.25, ease: "easeOut" }}
-              className="mb-3 flex items-start justify-between gap-3"
-            >
+          <div className="relative mb-3 min-h-16">
+            <AnimatePresence>
+              <motion.div
+                key={currentStage.short}
+                initial={{ opacity: 0, x: 12 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -12 }}
+                transition={{ duration: 0.25, ease: "easeOut" }}
+                className="absolute inset-0 flex items-start justify-between gap-3"
+              >
               <div className="flex items-center gap-3">
                 <div
                   className="grid h-10 w-10 place-items-center rounded-xl border text-sm font-bold"
@@ -1011,7 +1012,8 @@ function App() {
                 {isRunning ? "in progress" : "ready"}
               </div>
             </motion.div>
-          </AnimatePresence>
+            </AnimatePresence>
+          </div>
 
           <div className="space-y-2">
             {currentVisibleNotes.map((item, idx) => (
