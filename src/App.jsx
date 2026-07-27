@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { animate, motion, MotionConfig, useReducedMotion } from "framer-motion";
+import { animate, AnimatePresence, motion, MotionConfig, useAnimationControls, useReducedMotion } from "framer-motion";
 
 const STAGES = [
   { key: "dnsLookupMs", short: "DNS", label: "DNS Lookup", color: "#f97316" },
@@ -542,6 +542,7 @@ function App() {
   const shouldReduceMotion = useReducedMotion();
   const [displayedVisits, setDisplayedVisits] = useState(() => getCachedVisitTotal());
   const previousVisitsRef = useRef(totalVisits);
+  const inputControls = useAnimationControls();
   const [, setVisitorStatus] = useState("connecting");
   const [activeStage, setActiveStage] = useState(0);
   const [focusedStage, setFocusedStage] = useState(0);
@@ -705,6 +706,10 @@ function App() {
           stageIndex: 0
         }
       ]);
+      inputControls.start({
+        x: [0, -8, 8, -6, 6, -3, 3, 0],
+        transition: { duration: 0.45, ease: "easeInOut" }
+      });
       return;
     }
 
@@ -863,27 +868,50 @@ function App() {
 
         <section className="panel-glass rounded-2xl border border-slate-700/40 p-4 shadow-panel sm:p-5">
           <div className="flex flex-col gap-3 md:flex-row">
-            <input
+            <motion.input
+              animate={inputControls}
               value={url}
               onChange={(event) => setUrl(event.target.value)}
               placeholder="https://muhammadqodir.com"
               className="h-12 flex-1 rounded-xl border border-slate-700/70 bg-slate-900/80 px-4 font-['Share_Tech_Mono'] text-sm text-slate-100 outline-none transition focus:border-cyan-400/70 focus:shadow-neon"
             />
-            <button
+            <motion.button
               type="button"
               onClick={runAnalysis}
               disabled={isRunning}
+              whileHover={!isRunning ? { scale: 1.03 } : undefined}
+              whileTap={!isRunning ? { scale: 0.97 } : undefined}
               className="h-12 rounded-xl border border-cyan-400/60 bg-cyan-400/15 px-5 font-['Orbitron'] text-sm font-bold uppercase tracking-[0.18em] text-cyan-200 transition hover:bg-cyan-400/25 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isRunning ? "Running..." : "Analyze"}
-            </button>
+              {isRunning ? (
+                <span className="inline-flex items-center gap-2">
+                  <motion.span
+                    className="inline-block h-2 w-2 rounded-full bg-cyan-300"
+                    animate={{ opacity: [0.3, 1, 0.3], scale: [0.85, 1.1, 0.85] }}
+                    transition={{ duration: 0.9, repeat: Infinity, ease: "easeInOut" }}
+                  />
+                  Running...
+                </span>
+              ) : (
+                "Analyze"
+              )}
+            </motion.button>
           </div>
 
-          {errorMessage ? (
-            <p className="mt-3 rounded-xl border border-rose-500/45 bg-rose-500/10 px-3 py-2 font-['Share_Tech_Mono'] text-xs text-rose-200">
-              {errorMessage}
-            </p>
-          ) : null}
+          <AnimatePresence>
+            {errorMessage ? (
+              <motion.p
+                key="error-message"
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.2 }}
+                className="mt-3 rounded-xl border border-rose-500/45 bg-rose-500/10 px-3 py-2 font-['Share_Tech_Mono'] text-xs text-rose-200"
+              >
+                {errorMessage}
+              </motion.p>
+            ) : null}
+          </AnimatePresence>
         </section>
 
         <section className="panel-glass rounded-2xl border border-slate-700/40 p-4 sm:p-5">
