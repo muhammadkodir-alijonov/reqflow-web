@@ -83,9 +83,16 @@ the sense of real progress.
 
 ### 5. Stage detail panel (notes)
 Switching stages crossfades/slides the panel header (icon, title, color) via
-`AnimatePresence mode="wait"`. Notes keep their existing progressive-reveal
-timing logic, but each note additionally animates in with fade + slight
-slide instead of appearing instantly.
+`AnimatePresence` in its default (simultaneous) mode, with both the exiting
+and entering header sharing one CSS Grid cell (`col-start-1 row-start-1`) so
+they overlap in place — a true crossfade rather than a sequential
+out-then-in, and it auto-sizes to the taller instance instead of relying on
+a fixed height. (An earlier fix-round attempt used a fixed `min-h-16` +
+`absolute inset-0`, which risked content overflowing on narrow viewports
+with long titles; the grid-stack approach replaced it.) Notes keep their
+existing progressive-reveal timing logic, but each note additionally
+animates in with fade + slight slide + a small per-note stagger delay
+instead of appearing instantly.
 
 ### 6. Terminal log
 Each log line enters via `AnimatePresence` with a slide-up + fade
@@ -101,12 +108,21 @@ The existing cyan/fuchsia blurred gradient blobs gain a slow, continuous
 ## Accessibility & Performance
 
 - `useReducedMotion()` gates all purely-decorative motion (stagger entrance,
-  ambient pulse, shake); functional motion (progress fill) falls back to a
-  simple fade.
+  ambient pulse, shake, the running-state pulse dot, the terminal cursor
+  blink); functional motion driven by transform-family properties (the
+  waterfall bars' and pipeline line's `scaleX` fill) is auto-suppressed by
+  `<MotionConfig reducedMotion="user">` and snaps to its end state instantly
+  rather than fading — `MotionConfig`'s reduced-motion handling only covers
+  positional/transform keys, not a general instant→fade conversion, and an
+  instant snap still communicates progress correctly, so this was accepted
+  as-is rather than adding extra fade logic.
 - Animations stick to `transform`/`opacity` to stay GPU-accelerated and avoid
   layout thrashing.
-- Framer Motion adds a modest bundle size increase (~30–40kb minified); no
-  further bundle optimization is in scope for this pass.
+- Framer Motion's actual production impact: 302.54kB JS / 98.91kB gzip total
+  bundle (up from a pre-animation baseline of plain React + Tailwind CDN),
+  per `npm run build` — noticeably more than the ~30-40kb minified estimate
+  made during design. Acceptable for this app; no further bundle
+  optimization (e.g. `LazyMotion`/`m` components) is in scope for this pass.
 
 ## Testing Plan
 
