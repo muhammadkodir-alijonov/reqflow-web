@@ -109,19 +109,9 @@ body {
   filter: saturate(115%) brightness(110%);
 }
 
-.terminal-line {
-  animation: fadeLine 220ms ease-out;
-}
-
-@keyframes fadeLine {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.terminal-cursor {
+  display: inline-block;
+  color: #38bdf8;
 }
 
 @media (max-width: 640px) {

@@ -1098,11 +1098,27 @@ function App() {
         <section className="panel-glass rounded-2xl border border-slate-700/40 p-4 sm:p-5">
           <p className="mb-3 font-mono text-xs uppercase tracking-[0.35em] text-slate-500">Terminal Log</p>
           <div className="max-h-72 overflow-auto rounded-xl border border-slate-800 bg-black/60 p-4 font-['Share_Tech_Mono'] text-xs leading-6 text-slate-200">
-            {visibleLogs.map((entry, index) => (
-              <div key={`${entry.text}-${index}`} className="terminal-line">
-                {entry.text}
-              </div>
-            ))}
+            <AnimatePresence initial={false}>
+              {visibleLogs.map((entry, index) => (
+                <motion.div
+                  key={`${entry.text}-${index}`}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.22, ease: "easeOut" }}
+                >
+                  {entry.text}
+                </motion.div>
+              ))}
+            </AnimatePresence>
+            {visibleLogs.length > 0 ? (
+              <motion.span
+                className="terminal-cursor"
+                animate={{ opacity: [1, 1, 0, 0] }}
+                transition={{ duration: 1, repeat: Infinity, times: [0, 0.5, 0.5, 1], ease: "linear" }}
+              >
+                ▊
+              </motion.span>
+            ) : null}
           </div>
         </section>
 
