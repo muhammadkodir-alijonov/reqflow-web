@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { animate, AnimatePresence, motion, MotionConfig, useAnimationControls, useReducedMotion } from "framer-motion";
 
 const STAGES = [
   { key: "dnsLookupMs", short: "DNS", label: "DNS Lookup", color: "#f97316" },
@@ -8,6 +9,25 @@ const STAGES = [
   { key: "responseMs", short: "RES", label: "HTTP Response", color: "#22c55e" },
   { key: "browserRenderMs", short: "BND", label: "Browser Render", color: "#ec4899" }
 ];
+
+const heroContainerVariants = {
+  hidden: {},
+  visible: {
+    transition: {
+      staggerChildren: 0.08
+    }
+  }
+};
+
+const heroItemVariants = {
+  hidden: { opacity: 0, y: 16, filter: "blur(6px)" },
+  visible: {
+    opacity: 1,
+    y: 0,
+    filter: "blur(0px)",
+    transition: { type: "spring", stiffness: 120, damping: 18 }
+  }
+};
 
 const DEFAULT_TARGET_URL = "https://muhammadqodir.com";
 
@@ -519,6 +539,10 @@ function App() {
   const [errorMessage, setErrorMessage] = useState("");
   const [hasAnalyzed, setHasAnalyzed] = useState(false);
   const [totalVisits, setTotalVisits] = useState(() => getCachedVisitTotal());
+  const shouldReduceMotion = useReducedMotion();
+  const [displayedVisits, setDisplayedVisits] = useState(() => getCachedVisitTotal());
+  const previousVisitsRef = useRef(totalVisits);
+  const inputControls = useAnimationControls();
   const [, setVisitorStatus] = useState("connecting");
   const [activeStage, setActiveStage] = useState(0);
   const [focusedStage, setFocusedStage] = useState(0);
@@ -616,6 +640,23 @@ function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (shouldReduceMotion) {
+      setDisplayedVisits(totalVisits);
+      previousVisitsRef.current = totalVisits;
+      return;
+    }
+
+    const controls = animate(previousVisitsRef.current, totalVisits, {
+      duration: 0.6,
+      ease: "easeOut",
+      onUpdate: (value) => setDisplayedVisits(Math.round(value))
+    });
+    previousVisitsRef.current = totalVisits;
+
+    return () => controls.stop();
+  }, [totalVisits, shouldReduceMotion]);
+
   const appendLog = (text, stageIndex) =>
     setLogs((prev) => [...prev, { text, stageIndex }]);
 
@@ -665,6 +706,10 @@ function App() {
           stageIndex: 0
         }
       ]);
+      inputControls.start({
+        x: [0, -8, 8, -6, 6, -3, 3, 0],
+        transition: { duration: 0.45, ease: "easeInOut" }
+      });
       return;
     }
 
@@ -775,57 +820,124 @@ function App() {
     setActiveStage(index);
   };
 
+  const completedStageCount = STAGES.filter((stage) => barProgress[stage.key] === 1).length;
+  const pipelineProgress = hasAnalyzed
+    ? Math.min(1, completedStageCount / (STAGES.length - 1))
+    : 0;
+
   return (
+    <MotionConfig reducedMotion="user">
     <main className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-100">
       <div className="absolute inset-0 opacity-60">
         <div className="hero-grid" />
       </div>
-      <div className="pointer-events-none absolute -top-40 left-1/2 h-[560px] w-[560px] -translate-x-1/2 rounded-full bg-cyan-400/20 blur-[170px]" />
-      <div className="pointer-events-none absolute bottom-0 right-0 h-[420px] w-[420px] rounded-full bg-fuchsia-500/20 blur-[140px]" />
+      <motion.div
+        className="pointer-events-none absolute -top-40 left-1/2 h-[560px] w-[560px] rounded-full bg-cyan-400/20 blur-[170px]"
+        style={{ x: "-50%" }}
+        animate={
+          shouldReduceMotion
+            ? undefined
+            : { scale: [1, 1.08, 1], opacity: [1, 0.72, 1] }
+        }
+        transition={{ duration: 10, repeat: Infinity, repeatType: "mirror", ease: "easeInOut" }}
+      />
+      <motion.div
+        className="pointer-events-none absolute bottom-0 right-0 h-[420px] w-[420px] rounded-full bg-fuchsia-500/20 blur-[140px]"
+        animate={
+          shouldReduceMotion
+            ? undefined
+            : { scale: [1, 1.1, 1], opacity: [1, 0.7, 1] }
+        }
+        transition={{ duration: 12, repeat: Infinity, repeatType: "mirror", ease: "easeInOut", delay: 1.5 }}
+      />
 
       <section className="relative mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-10 sm:px-6 lg:px-8">
-        <header className="space-y-3">
+        <motion.header
+          className="space-y-3"
+          variants={heroContainerVariants}
+          initial="hidden"
+          animate="visible"
+        >
           <div className="flex items-center justify-between gap-3">
-            <p className="font-mono text-xs uppercase tracking-[0.45em] text-slate-400">
+            <motion.p
+              variants={heroItemVariants}
+              className="font-mono text-xs uppercase tracking-[0.45em] text-slate-400"
+            >
               Network - Browser
-            </p>
-            <div className="rounded-xl border border-emerald-400/40 bg-emerald-400/10 px-3 py-2 text-right">
+            </motion.p>
+            <motion.div
+              variants={heroItemVariants}
+              className="rounded-xl border border-emerald-400/40 bg-emerald-400/10 px-3 py-2 text-right"
+            >
               <p className="font-['Share_Tech_Mono'] text-[10px] uppercase tracking-[0.2em] text-emerald-200">
-                Total Visits {formatVisitsCompact(totalVisits)}
+                Total Visits {formatVisitsCompact(displayedVisits)}
               </p>
-            </div>
+            </motion.div>
           </div>
-          <h1 className="title-glow text-3xl font-extrabold uppercase tracking-[0.05em] sm:text-5xl">
+          <motion.h1
+            variants={heroItemVariants}
+            className="title-glow text-3xl font-extrabold uppercase tracking-[0.05em] sm:text-5xl"
+          >
             HTTP Request Lifecycle
-          </h1>
-          <p className="font-['Space_Grotesk'] text-sm text-slate-400 sm:text-base">
+          </motion.h1>
+          <motion.p
+            variants={heroItemVariants}
+            className="font-['Space_Grotesk'] text-sm text-slate-400 sm:text-base"
+          >
             Neon waterfall timeline for DNS, transport, security, request and render phases.
-          </p>
-        </header>
+          </motion.p>
+        </motion.header>
 
         <section className="panel-glass rounded-2xl border border-slate-700/40 p-4 shadow-panel sm:p-5">
           <div className="flex flex-col gap-3 md:flex-row">
-            <input
+            <motion.input
+              animate={inputControls}
               value={url}
               onChange={(event) => setUrl(event.target.value)}
               placeholder="https://muhammadqodir.com"
               className="h-12 flex-1 rounded-xl border border-slate-700/70 bg-slate-900/80 px-4 font-['Share_Tech_Mono'] text-sm text-slate-100 outline-none transition focus:border-cyan-400/70 focus:shadow-neon"
             />
-            <button
+            <motion.button
               type="button"
               onClick={runAnalysis}
               disabled={isRunning}
+              whileHover={!isRunning ? { scale: 1.03 } : undefined}
+              whileTap={!isRunning ? { scale: 0.97 } : undefined}
               className="h-12 rounded-xl border border-cyan-400/60 bg-cyan-400/15 px-5 font-['Orbitron'] text-sm font-bold uppercase tracking-[0.18em] text-cyan-200 transition hover:bg-cyan-400/25 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isRunning ? "Running..." : "Analyze"}
-            </button>
+              {isRunning ? (
+                <span className="inline-flex items-center gap-2">
+                  <motion.span
+                    className="inline-block h-2 w-2 rounded-full bg-cyan-300"
+                    animate={
+                      shouldReduceMotion
+                        ? undefined
+                        : { opacity: [0.3, 1, 0.3], scale: [0.85, 1.1, 0.85] }
+                    }
+                    transition={{ duration: 0.9, repeat: Infinity, ease: "easeInOut" }}
+                  />
+                  Running...
+                </span>
+              ) : (
+                "Analyze"
+              )}
+            </motion.button>
           </div>
 
-          {errorMessage ? (
-            <p className="mt-3 rounded-xl border border-rose-500/45 bg-rose-500/10 px-3 py-2 font-['Share_Tech_Mono'] text-xs text-rose-200">
-              {errorMessage}
-            </p>
-          ) : null}
+          <AnimatePresence>
+            {errorMessage ? (
+              <motion.p
+                key="error-message"
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.2 }}
+                className="mt-3 rounded-xl border border-rose-500/45 bg-rose-500/10 px-3 py-2 font-['Share_Tech_Mono'] text-xs text-rose-200"
+              >
+                {errorMessage}
+              </motion.p>
+            ) : null}
+          </AnimatePresence>
         </section>
 
         <section className="panel-glass rounded-2xl border border-slate-700/40 p-4 sm:p-5">
@@ -834,6 +946,12 @@ function App() {
           </p>
           <div className="relative grid grid-cols-2 gap-y-5 sm:grid-cols-3 lg:grid-cols-6">
             <span className="pipeline-line" />
+            <motion.span
+              className="pipeline-line-progress"
+              initial={{ scaleX: 0 }}
+              animate={{ scaleX: pipelineProgress }}
+              transition={{ type: "spring", stiffness: 90, damping: 20 }}
+            />
             {timeline.map((stage, index) => {
               const isActive = activeStage === index;
               const isDone = barProgress[stage.key] === 1;
@@ -847,7 +965,15 @@ function App() {
                     }`}
                     style={{ "--stage-color": stage.color }}
                   >
-                    {stage.short}
+                    {isActive ? (
+                      <motion.span
+                        layoutId="active-stage-ring"
+                        className="stage-node-ring"
+                        style={{ "--stage-color": stage.color }}
+                        transition={{ type: "spring", stiffness: 260, damping: 24 }}
+                      />
+                    ) : null}
+                    <span className="relative z-10">{stage.short}</span>
                   </button>
                   <div className="text-center font-['Space_Grotesk'] text-[10px] font-semibold text-slate-300">
                     {stage.label}
@@ -865,46 +991,60 @@ function App() {
           className="panel-glass rounded-2xl border border-slate-700/40 p-4 sm:p-5"
           style={{ boxShadow: `0 0 30px ${currentStage.color}26` }}
         >
-          <div className="mb-3 flex items-start justify-between gap-3">
-            <div className="flex items-center gap-3">
+          <div className="relative mb-3 grid">
+            <AnimatePresence>
+              <motion.div
+                key={currentStage.short}
+                initial={{ opacity: 0, x: 12 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -12 }}
+                transition={{ duration: 0.25, ease: "easeOut" }}
+                className="col-start-1 row-start-1 flex items-start justify-between gap-3"
+              >
+              <div className="flex items-center gap-3">
+                <div
+                  className="grid h-10 w-10 place-items-center rounded-xl border text-sm font-bold"
+                  style={{
+                    borderColor: `${currentStage.color}88`,
+                    color: currentStage.color,
+                    boxShadow: `0 0 16px ${currentStage.color}44`
+                  }}
+                >
+                  {currentStage.short}
+                </div>
+                <div>
+                  <p
+                    className="font-['Orbitron'] text-xl font-bold"
+                    style={{ color: currentStage.color }}
+                  >
+                    {detail.title}
+                  </p>
+                  <p className="font-['Share_Tech_Mono'] text-xs text-slate-500">
+                    typical: {hasAnalyzed ? `~${detail.durationMs}ms` : "0ms"}
+                  </p>
+                </div>
+              </div>
               <div
-                className="grid h-10 w-10 place-items-center rounded-xl border text-sm font-bold"
+                className="rounded-full border px-3 py-1 font-['Share_Tech_Mono'] text-xs"
                 style={{
-                  borderColor: `${currentStage.color}88`,
+                  borderColor: `${currentStage.color}66`,
                   color: currentStage.color,
-                  boxShadow: `0 0 16px ${currentStage.color}44`
+                  boxShadow: `0 0 12px ${currentStage.color}33`
                 }}
               >
-                {currentStage.short}
+                {isRunning ? "in progress" : "ready"}
               </div>
-              <div>
-                <p
-                  className="font-['Orbitron'] text-xl font-bold"
-                  style={{ color: currentStage.color }}
-                >
-                  {detail.title}
-                </p>
-                <p className="font-['Share_Tech_Mono'] text-xs text-slate-500">
-                  typical: {hasAnalyzed ? `~${detail.durationMs}ms` : "0ms"}
-                </p>
-              </div>
-            </div>
-            <div
-              className="rounded-full border px-3 py-1 font-['Share_Tech_Mono'] text-xs"
-              style={{
-                borderColor: `${currentStage.color}66`,
-                color: currentStage.color,
-                boxShadow: `0 0 12px ${currentStage.color}33`
-              }}
-            >
-              {isRunning ? "in progress" : "ready"}
-            </div>
+            </motion.div>
+            </AnimatePresence>
           </div>
 
           <div className="space-y-2">
             {currentVisibleNotes.map((item, idx) => (
-              <div
+              <motion.div
                 key={`${currentStage.short}-${idx}`}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.22, delay: idx * 0.04, ease: "easeOut" }}
                 className="flex items-center justify-between rounded-lg border border-slate-800/90 bg-slate-950/40 px-3 py-2"
               >
                 <p className="flex items-center gap-2 text-xs font-semibold text-slate-300">
@@ -917,7 +1057,7 @@ function App() {
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                   {item.right}
                 </p>
-              </div>
+              </motion.div>
             ))}
           </div>
         </section>
@@ -946,15 +1086,27 @@ function App() {
                     className="absolute left-0 top-0 h-full"
                     style={{ width: `${stage.startPct}%` }}
                   />
-                  <div
+                  <motion.div
                     className="waterfall-bar"
                     style={{
                       left: `${stage.startPct}%`,
                       width: `${stage.widthPct}%`,
                       background: `linear-gradient(90deg, ${stage.color}, ${stage.color}cc)`,
-                      boxShadow: `0 0 16px ${stage.color}66`,
-                      opacity: focusedStage >= idx ? 1 : 0.2,
-                      transform: `scaleX(${barProgress[stage.key] || (!isRunning && focusedStage >= idx ? 1 : 0)})`
+                      boxShadow: `0 0 16px ${stage.color}66`
+                    }}
+                    initial={false}
+                    animate={{
+                      scaleX: barProgress[stage.key] || (!isRunning && focusedStage >= idx ? 1 : 0),
+                      opacity: focusedStage >= idx ? 1 : 0.2
+                    }}
+                    transition={{
+                      scaleX: {
+                        type: "spring",
+                        stiffness: 140,
+                        damping: 14,
+                        delay: idx * 0.06
+                      },
+                      opacity: { duration: 0.2 }
                     }}
                   />
                 </div>
@@ -969,11 +1121,32 @@ function App() {
         <section className="panel-glass rounded-2xl border border-slate-700/40 p-4 sm:p-5">
           <p className="mb-3 font-mono text-xs uppercase tracking-[0.35em] text-slate-500">Terminal Log</p>
           <div className="max-h-72 overflow-auto rounded-xl border border-slate-800 bg-black/60 p-4 font-['Share_Tech_Mono'] text-xs leading-6 text-slate-200">
-            {visibleLogs.map((entry, index) => (
-              <div key={`${entry.text}-${index}`} className="terminal-line">
-                {entry.text}
-              </div>
-            ))}
+            <AnimatePresence initial={false}>
+              {visibleLogs.map((entry, index) => (
+                <motion.div
+                  key={`${entry.text}-${index}`}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.22, ease: "easeOut" }}
+                >
+                  {entry.text}
+                </motion.div>
+              ))}
+            </AnimatePresence>
+            {visibleLogs.length > 0 ? (
+              <motion.span
+                className="terminal-cursor"
+                animate={
+                  shouldReduceMotion
+                    ? undefined
+                    : { opacity: [1, 1, 0, 0] }
+                }
+                transition={{ duration: 1, repeat: Infinity, times: [0, 0.5, 0.5, 1], ease: "linear" }}
+              >
+                ▊
+              </motion.span>
+            ) : null}
           </div>
         </section>
 
@@ -992,6 +1165,7 @@ function App() {
         </footer>
       </section>
     </main>
+    </MotionConfig>
   );
 }
 
