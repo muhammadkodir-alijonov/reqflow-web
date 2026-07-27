@@ -820,6 +820,9 @@ function App() {
     setActiveStage(index);
   };
 
+  const completedStageCount = STAGES.filter((stage) => barProgress[stage.key] === 1).length;
+  const pipelineProgress = hasAnalyzed ? completedStageCount / STAGES.length : 0;
+
   return (
     <MotionConfig reducedMotion="user">
     <main className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-100">
@@ -920,6 +923,12 @@ function App() {
           </p>
           <div className="relative grid grid-cols-2 gap-y-5 sm:grid-cols-3 lg:grid-cols-6">
             <span className="pipeline-line" />
+            <motion.span
+              className="pipeline-line-progress"
+              initial={{ scaleX: 0 }}
+              animate={{ scaleX: pipelineProgress }}
+              transition={{ type: "spring", stiffness: 90, damping: 20 }}
+            />
             {timeline.map((stage, index) => {
               const isActive = activeStage === index;
               const isDone = barProgress[stage.key] === 1;
@@ -933,7 +942,15 @@ function App() {
                     }`}
                     style={{ "--stage-color": stage.color }}
                   >
-                    {stage.short}
+                    {isActive ? (
+                      <motion.span
+                        layoutId="active-stage-ring"
+                        className="stage-node-ring"
+                        style={{ "--stage-color": stage.color }}
+                        transition={{ type: "spring", stiffness: 260, damping: 24 }}
+                      />
+                    ) : null}
+                    <span className="relative z-10">{stage.short}</span>
                   </button>
                   <div className="text-center font-['Space_Grotesk'] text-[10px] font-semibold text-slate-300">
                     {stage.label}

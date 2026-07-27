@@ -44,7 +44,20 @@ body {
   filter: drop-shadow(0 0 8px rgba(148, 163, 184, 0.24));
 }
 
+.pipeline-line-progress {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  top: 19px;
+  height: 2px;
+  transform-origin: left center;
+  background: linear-gradient(90deg, #38bdf8, #22c55e);
+  filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.55));
+  border-radius: 999px;
+}
+
 .stage-node {
+  position: relative;
   display: grid;
   height: 38px;
   width: 38px;
@@ -76,6 +89,17 @@ body {
   box-shadow: 0 0 16px color-mix(in srgb, var(--stage-color) 64%, transparent);
 }
 
+.stage-node-ring {
+  position: absolute;
+  inset: -3px;
+  border-radius: 9999px;
+  border: 2px solid var(--stage-color);
+  box-shadow:
+    0 0 18px color-mix(in srgb, var(--stage-color) 80%, transparent),
+    0 0 30px color-mix(in srgb, var(--stage-color) 40%, transparent);
+  pointer-events: none;
+}
+
 .waterfall-bar {
   position: absolute;
   top: 4px;
@@ -102,7 +126,8 @@ body {
 }
 
 @media (max-width: 640px) {
-  .pipeline-line {
+  .pipeline-line,
+  .pipeline-line-progress {
     display: none;
   }
 
