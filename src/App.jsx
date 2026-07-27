@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { animate, motion, MotionConfig, useReducedMotion } from "framer-motion";
 
 const STAGES = [
   { key: "dnsLookupMs", short: "DNS", label: "DNS Lookup", color: "#f97316" },
@@ -8,6 +9,25 @@ const STAGES = [
   { key: "responseMs", short: "RES", label: "HTTP Response", color: "#22c55e" },
   { key: "browserRenderMs", short: "BND", label: "Browser Render", color: "#ec4899" }
 ];
+
+const heroContainerVariants = {
+  hidden: {},
+  visible: {
+    transition: {
+      staggerChildren: 0.08
+    }
+  }
+};
+
+const heroItemVariants = {
+  hidden: { opacity: 0, y: 16, filter: "blur(6px)" },
+  visible: {
+    opacity: 1,
+    y: 0,
+    filter: "blur(0px)",
+    transition: { type: "spring", stiffness: 120, damping: 18 }
+  }
+};
 
 const DEFAULT_TARGET_URL = "https://muhammadqodir.com";
 
@@ -519,6 +539,9 @@ function App() {
   const [errorMessage, setErrorMessage] = useState("");
   const [hasAnalyzed, setHasAnalyzed] = useState(false);
   const [totalVisits, setTotalVisits] = useState(() => getCachedVisitTotal());
+  const shouldReduceMotion = useReducedMotion();
+  const [displayedVisits, setDisplayedVisits] = useState(() => getCachedVisitTotal());
+  const previousVisitsRef = useRef(totalVisits);
   const [, setVisitorStatus] = useState("connecting");
   const [activeStage, setActiveStage] = useState(0);
   const [focusedStage, setFocusedStage] = useState(0);
@@ -615,6 +638,23 @@ function App() {
       clearInterval(intervalId);
     };
   }, []);
+
+  useEffect(() => {
+    if (shouldReduceMotion) {
+      setDisplayedVisits(totalVisits);
+      previousVisitsRef.current = totalVisits;
+      return;
+    }
+
+    const controls = animate(previousVisitsRef.current, totalVisits, {
+      duration: 0.6,
+      ease: "easeOut",
+      onUpdate: (value) => setDisplayedVisits(Math.round(value))
+    });
+    previousVisitsRef.current = totalVisits;
+
+    return () => controls.stop();
+  }, [totalVisits, shouldReduceMotion]);
 
   const appendLog = (text, stageIndex) =>
     setLogs((prev) => [...prev, { text, stageIndex }]);
@@ -776,6 +816,7 @@ function App() {
   };
 
   return (
+    <MotionConfig reducedMotion="user">
     <main className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-100">
       <div className="absolute inset-0 opacity-60">
         <div className="hero-grid" />
@@ -784,24 +825,41 @@ function App() {
       <div className="pointer-events-none absolute bottom-0 right-0 h-[420px] w-[420px] rounded-full bg-fuchsia-500/20 blur-[140px]" />
 
       <section className="relative mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-10 sm:px-6 lg:px-8">
-        <header className="space-y-3">
+        <motion.header
+          className="space-y-3"
+          variants={heroContainerVariants}
+          initial="hidden"
+          animate="visible"
+        >
           <div className="flex items-center justify-between gap-3">
-            <p className="font-mono text-xs uppercase tracking-[0.45em] text-slate-400">
+            <motion.p
+              variants={heroItemVariants}
+              className="font-mono text-xs uppercase tracking-[0.45em] text-slate-400"
+            >
               Network - Browser
-            </p>
-            <div className="rounded-xl border border-emerald-400/40 bg-emerald-400/10 px-3 py-2 text-right">
+            </motion.p>
+            <motion.div
+              variants={heroItemVariants}
+              className="rounded-xl border border-emerald-400/40 bg-emerald-400/10 px-3 py-2 text-right"
+            >
               <p className="font-['Share_Tech_Mono'] text-[10px] uppercase tracking-[0.2em] text-emerald-200">
-                Total Visits {formatVisitsCompact(totalVisits)}
+                Total Visits {formatVisitsCompact(displayedVisits)}
               </p>
-            </div>
+            </motion.div>
           </div>
-          <h1 className="title-glow text-3xl font-extrabold uppercase tracking-[0.05em] sm:text-5xl">
+          <motion.h1
+            variants={heroItemVariants}
+            className="title-glow text-3xl font-extrabold uppercase tracking-[0.05em] sm:text-5xl"
+          >
             HTTP Request Lifecycle
-          </h1>
-          <p className="font-['Space_Grotesk'] text-sm text-slate-400 sm:text-base">
+          </motion.h1>
+          <motion.p
+            variants={heroItemVariants}
+            className="font-['Space_Grotesk'] text-sm text-slate-400 sm:text-base"
+          >
             Neon waterfall timeline for DNS, transport, security, request and render phases.
-          </p>
-        </header>
+          </motion.p>
+        </motion.header>
 
         <section className="panel-glass rounded-2xl border border-slate-700/40 p-4 shadow-panel sm:p-5">
           <div className="flex flex-col gap-3 md:flex-row">
@@ -992,6 +1050,7 @@ function App() {
         </footer>
       </section>
     </main>
+    </MotionConfig>
   );
 }
 
