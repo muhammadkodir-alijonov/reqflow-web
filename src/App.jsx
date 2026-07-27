@@ -821,7 +821,9 @@ function App() {
   };
 
   const completedStageCount = STAGES.filter((stage) => barProgress[stage.key] === 1).length;
-  const pipelineProgress = hasAnalyzed ? completedStageCount / STAGES.length : 0;
+  const pipelineProgress = hasAnalyzed
+    ? Math.min(1, completedStageCount / (STAGES.length - 1))
+    : 0;
 
   return (
     <MotionConfig reducedMotion="user">
@@ -830,11 +832,12 @@ function App() {
         <div className="hero-grid" />
       </div>
       <motion.div
-        className="pointer-events-none absolute -top-40 left-1/2 h-[560px] w-[560px] -translate-x-1/2 rounded-full bg-cyan-400/20 blur-[170px]"
+        className="pointer-events-none absolute -top-40 left-1/2 h-[560px] w-[560px] rounded-full bg-cyan-400/20 blur-[170px]"
+        style={{ x: "-50%" }}
         animate={
           shouldReduceMotion
             ? undefined
-            : { scale: [1, 1.08, 1], opacity: [0.2, 0.28, 0.2] }
+            : { scale: [1, 1.08, 1], opacity: [1, 0.72, 1] }
         }
         transition={{ duration: 10, repeat: Infinity, repeatType: "mirror", ease: "easeInOut" }}
       />
@@ -843,7 +846,7 @@ function App() {
         animate={
           shouldReduceMotion
             ? undefined
-            : { scale: [1, 1.1, 1], opacity: [0.2, 0.3, 0.2] }
+            : { scale: [1, 1.1, 1], opacity: [1, 0.7, 1] }
         }
         transition={{ duration: 12, repeat: Infinity, repeatType: "mirror", ease: "easeInOut", delay: 1.5 }}
       />
@@ -906,7 +909,11 @@ function App() {
                 <span className="inline-flex items-center gap-2">
                   <motion.span
                     className="inline-block h-2 w-2 rounded-full bg-cyan-300"
-                    animate={{ opacity: [0.3, 1, 0.3], scale: [0.85, 1.1, 0.85] }}
+                    animate={
+                      shouldReduceMotion
+                        ? undefined
+                        : { opacity: [0.3, 1, 0.3], scale: [0.85, 1.1, 0.85] }
+                    }
                     transition={{ duration: 0.9, repeat: Infinity, ease: "easeInOut" }}
                   />
                   Running...
@@ -984,7 +991,7 @@ function App() {
           className="panel-glass rounded-2xl border border-slate-700/40 p-4 sm:p-5"
           style={{ boxShadow: `0 0 30px ${currentStage.color}26` }}
         >
-          <div className="relative mb-3 min-h-16">
+          <div className="relative mb-3 grid">
             <AnimatePresence>
               <motion.div
                 key={currentStage.short}
@@ -992,7 +999,7 @@ function App() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -12 }}
                 transition={{ duration: 0.25, ease: "easeOut" }}
-                className="absolute inset-0 flex items-start justify-between gap-3"
+                className="col-start-1 row-start-1 flex items-start justify-between gap-3"
               >
               <div className="flex items-center gap-3">
                 <div
@@ -1037,7 +1044,7 @@ function App() {
                 key={`${currentStage.short}-${idx}`}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.22, ease: "easeOut" }}
+                transition={{ duration: 0.22, delay: idx * 0.04, ease: "easeOut" }}
                 className="flex items-center justify-between rounded-lg border border-slate-800/90 bg-slate-950/40 px-3 py-2"
               >
                 <p className="flex items-center gap-2 text-xs font-semibold text-slate-300">
@@ -1120,6 +1127,7 @@ function App() {
                   key={`${entry.text}-${index}`}
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
                   transition={{ duration: 0.22, ease: "easeOut" }}
                 >
                   {entry.text}
@@ -1129,7 +1137,11 @@ function App() {
             {visibleLogs.length > 0 ? (
               <motion.span
                 className="terminal-cursor"
-                animate={{ opacity: [1, 1, 0, 0] }}
+                animate={
+                  shouldReduceMotion
+                    ? undefined
+                    : { opacity: [1, 1, 0, 0] }
+                }
                 transition={{ duration: 1, repeat: Infinity, times: [0, 0.5, 0.5, 1], ease: "linear" }}
               >
                 ▊
