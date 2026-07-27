@@ -107,7 +107,6 @@ body {
   border-radius: 8px;
   transform-origin: left;
   filter: saturate(115%) brightness(110%);
-  transition: transform 0.48s ease-out, opacity 0.24s ease;
 }
 
 .terminal-line {

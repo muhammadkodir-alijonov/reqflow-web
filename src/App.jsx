@@ -1049,15 +1049,27 @@ function App() {
                     className="absolute left-0 top-0 h-full"
                     style={{ width: `${stage.startPct}%` }}
                   />
-                  <div
+                  <motion.div
                     className="waterfall-bar"
                     style={{
                       left: `${stage.startPct}%`,
                       width: `${stage.widthPct}%`,
                       background: `linear-gradient(90deg, ${stage.color}, ${stage.color}cc)`,
-                      boxShadow: `0 0 16px ${stage.color}66`,
-                      opacity: focusedStage >= idx ? 1 : 0.2,
-                      transform: `scaleX(${barProgress[stage.key] || (!isRunning && focusedStage >= idx ? 1 : 0)})`
+                      boxShadow: `0 0 16px ${stage.color}66`
+                    }}
+                    initial={false}
+                    animate={{
+                      scaleX: barProgress[stage.key] || (!isRunning && focusedStage >= idx ? 1 : 0),
+                      opacity: focusedStage >= idx ? 1 : 0.2
+                    }}
+                    transition={{
+                      scaleX: {
+                        type: "spring",
+                        stiffness: 140,
+                        damping: 14,
+                        delay: idx * 0.06
+                      },
+                      opacity: { duration: 0.2 }
                     }}
                   />
                 </div>
