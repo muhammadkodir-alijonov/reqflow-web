@@ -968,46 +968,58 @@ function App() {
           className="panel-glass rounded-2xl border border-slate-700/40 p-4 sm:p-5"
           style={{ boxShadow: `0 0 30px ${currentStage.color}26` }}
         >
-          <div className="mb-3 flex items-start justify-between gap-3">
-            <div className="flex items-center gap-3">
+          <AnimatePresence>
+            <motion.div
+              key={currentStage.short}
+              initial={{ opacity: 0, x: 12 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -12 }}
+              transition={{ duration: 0.25, ease: "easeOut" }}
+              className="mb-3 flex items-start justify-between gap-3"
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className="grid h-10 w-10 place-items-center rounded-xl border text-sm font-bold"
+                  style={{
+                    borderColor: `${currentStage.color}88`,
+                    color: currentStage.color,
+                    boxShadow: `0 0 16px ${currentStage.color}44`
+                  }}
+                >
+                  {currentStage.short}
+                </div>
+                <div>
+                  <p
+                    className="font-['Orbitron'] text-xl font-bold"
+                    style={{ color: currentStage.color }}
+                  >
+                    {detail.title}
+                  </p>
+                  <p className="font-['Share_Tech_Mono'] text-xs text-slate-500">
+                    typical: {hasAnalyzed ? `~${detail.durationMs}ms` : "0ms"}
+                  </p>
+                </div>
+              </div>
               <div
-                className="grid h-10 w-10 place-items-center rounded-xl border text-sm font-bold"
+                className="rounded-full border px-3 py-1 font-['Share_Tech_Mono'] text-xs"
                 style={{
-                  borderColor: `${currentStage.color}88`,
+                  borderColor: `${currentStage.color}66`,
                   color: currentStage.color,
-                  boxShadow: `0 0 16px ${currentStage.color}44`
+                  boxShadow: `0 0 12px ${currentStage.color}33`
                 }}
               >
-                {currentStage.short}
+                {isRunning ? "in progress" : "ready"}
               </div>
-              <div>
-                <p
-                  className="font-['Orbitron'] text-xl font-bold"
-                  style={{ color: currentStage.color }}
-                >
-                  {detail.title}
-                </p>
-                <p className="font-['Share_Tech_Mono'] text-xs text-slate-500">
-                  typical: {hasAnalyzed ? `~${detail.durationMs}ms` : "0ms"}
-                </p>
-              </div>
-            </div>
-            <div
-              className="rounded-full border px-3 py-1 font-['Share_Tech_Mono'] text-xs"
-              style={{
-                borderColor: `${currentStage.color}66`,
-                color: currentStage.color,
-                boxShadow: `0 0 12px ${currentStage.color}33`
-              }}
-            >
-              {isRunning ? "in progress" : "ready"}
-            </div>
-          </div>
+            </motion.div>
+          </AnimatePresence>
 
           <div className="space-y-2">
             {currentVisibleNotes.map((item, idx) => (
-              <div
+              <motion.div
                 key={`${currentStage.short}-${idx}`}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.22, ease: "easeOut" }}
                 className="flex items-center justify-between rounded-lg border border-slate-800/90 bg-slate-950/40 px-3 py-2"
               >
                 <p className="flex items-center gap-2 text-xs font-semibold text-slate-300">
@@ -1020,7 +1032,7 @@ function App() {
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                   {item.right}
                 </p>
-              </div>
+              </motion.div>
             ))}
           </div>
         </section>
