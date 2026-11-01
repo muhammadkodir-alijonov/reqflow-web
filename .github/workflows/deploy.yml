@@ -99,7 +99,7 @@ jobs:
 
             IMAGE_TAG="sha-$(echo $GITHUB_SHA | cut -c1-7)"
             FULL_IMAGE="$DOCKER_IMAGE:$IMAGE_TAG"
-            APP_DIR="/root/reqflow-web"
+            APP_DIR="/root/reqflow/web"
 
             has_compose_file() {
               [ -f "$1/docker-compose.yml" ] || [ -f "$1/compose.yml" ] || [ -f "$1/docker-compose.yaml" ] || [ -f "$1/compose.yaml" ]
@@ -170,7 +170,7 @@ jobs:
             HEALTHY=false
             for i in $(seq 1 9); do
               sleep 10
-              if http_check "http://localhost:3000"; then
+              if http_check "http://localhost:3001"; then
                 echo ">>> Healthy after ${i}0s!"
                 HEALTHY=true
                 break
