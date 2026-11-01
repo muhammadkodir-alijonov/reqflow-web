@@ -4,4 +4,4 @@ services:
     container_name: reqflow-web
     restart: unless-stopped
     ports:
-      - "3000:80"
+      - "3001:80"
